@@ -7,11 +7,18 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
 }
+
+// A failed command ends with a message and a failure code, not a crash report.
+AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+{
+    Console.Error.WriteLine(e.ExceptionObject is Exception error ? error.Message : "Something went wrong.");
+    Environment.Exit(1);
+};
 
 using var host = new YarHost();
 
@@ -100,6 +107,29 @@ if (command == "storage")
             $"{item.Kind,-12} {(item.AtLeast ? ">=" : "  ")}{item.Bytes / 1e6,10:0.0} MB  (data {item.DataBytes / 1e6,8:0.0} MB)  {item.Title}");
     }
     Console.WriteLine($"{overview.Items.Count} items, {overview.AccountedBytes / 1e9:0.0} GB accounted for");
+    return 0;
+}
+
+// yar-apps source-switch <kind> <source id> on|off: switch a source, as the switch in the window does.
+// On a real system this asks for a password; it exists so the test container can exercise it.
+if (command == "source-switch")
+{
+    var values = args.Where(a => !a.StartsWith('-')).Skip(1).ToList();
+    if (values.Count != 3 || values[2] is not ("on" or "off"))
+    {
+        Console.Error.WriteLine("Usage: yar-apps source-switch <flatpak|packagekit> <source id> <on|off>");
+        return 2;
+    }
+    var manager = host.SourceManagerFor(values[0]);
+    var all = await host.Catalog.LoadAppsAsync(CancellationToken.None);
+    var source = all.Sources.FirstOrDefault(s => s.ProviderId == values[0] && s.Id == values[1]);
+    if (manager is null || source is null || !manager.CanToggle(source))
+    {
+        Console.Error.WriteLine("No such source, or not one I may switch.");
+        return 1;
+    }
+    await manager.SetEnabledAsync(source, values[2] == "on", CancellationToken.None);
+    Console.WriteLine($"{source.Id} is now {values[2]}");
     return 0;
 }
 

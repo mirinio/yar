@@ -30,6 +30,8 @@ public sealed class FlatpakProvider
     private readonly string _userInstallationDir;
     private readonly string _systemInstallationDir;
     private readonly string? _appDataDir;
+    private readonly Lock _setUpGate = new();
+    private Task? _setUp;
 
     /// <param name="userInstallationDir">Usually <c>$XDG_DATA_HOME/flatpak</c>.</param>
     /// <param name="flatpakPath">Absolute path of the flatpak command; located automatically when null.</param>
@@ -314,10 +316,23 @@ public sealed class FlatpakProvider
 
     private async Task<string> RunAsync(IReadOnlyList<string> arguments, CancellationToken ct, TimeSpan? timeout = null)
     {
+        await EnsureSetUpAsync().WaitAsync(ct).ConfigureAwait(false);
         var result = await _runner.RunAsync(_flatpak!, arguments, timeout ?? Timeout, ct).ConfigureAwait(false);
         if (result.ExitCode != 0)
             throw new InvalidOperationException($"flatpak {arguments[0]} failed: {result.StdErr.Trim()}");
         return result.StdOut;
+    }
+
+    // The very first flatpak command on a machine creates the user's installation folder. Yar asks
+    // several things at once, and a second command arriving in the middle of that finds it half made
+    // and fails. So one harmless command is run to completion before any other is let through.
+    private Task EnsureSetUpAsync()
+    {
+        lock (_setUpGate)
+        {
+            return _setUp ??= _runner.RunAsync(
+                _flatpak!, ["remotes", "--user"], Timeout, CancellationToken.None);
+        }
     }
 
     private static string Columns(string[] columns) => "--columns=" + string.Join(",", columns);

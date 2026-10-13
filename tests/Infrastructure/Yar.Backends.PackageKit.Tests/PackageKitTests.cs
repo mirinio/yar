@@ -11,6 +11,16 @@ public class PackageKitTests
         public Dictionary<string, string> Owners { get; } = [];
         public Dictionary<string, long> Sizes { get; } = [];
         public List<string> Searched { get; } = [];
+        public int Nudges { get; private set; }
+        public Dictionary<string, string> OwnersAfterNudge { get; } = [];
+
+        public Task NotifyPackagesChangedAsync(CancellationToken ct)
+        {
+            Nudges++;
+            foreach (var (path, id) in OwnersAfterNudge)
+                Owners[path] = id;
+            return Task.CompletedTask;
+        }
         public Dictionary<string, OfferSize> OfferSizes { get; } = [];
         public List<string> SizeQuestions { get; } = [];
 
@@ -144,7 +154,7 @@ public class PackageKitTests
             // dnf5 answers with a different data field than the one it was asked about.
             Sizes = { ["kmail;6.5;x86_64;updates"] = 123456 },
         };
-        var provider = new PackageKitProvider(client, [], [Dir]);
+        var provider = new PackageKitProvider(client, [], [Dir], recheckWait: TimeSpan.Zero);
         var index = new DesktopEntryIndex(
         [
             Launcher($"{Dir}/org.kde.ktnef.desktop", "KTnef"),
@@ -157,7 +167,9 @@ public class PackageKitTests
 
         var apps = await provider.ClaimAppsAsync(index, Token);
 
-        Assert.Equal(4, client.Searched.Count);
+        // Four launchers in the system folder are asked about; the one nobody owns again after a nudge.
+        Assert.Equal(4, client.Searched.Distinct().Count());
+        Assert.Equal(1, client.Nudges);
         Assert.DoesNotContain(client.Searched, path => path.Contains("mine") || path.Contains("lookalike"));
 
         var mail = apps.Single(a => a.Id == "kmail.x86_64");
@@ -215,16 +227,20 @@ public class PackageKitTests
                 Sizes = { [$"kmail;{kmailVersion};x86_64;updates"] = 100, ["tabby-terminal;1.0;x86_64;x"] = 200 },
             };
 
-            // First run: nothing remembered, every launcher is asked about.
+            // First run: nothing remembered, every launcher is asked about. The one nobody owns is asked
+            // about again a few times after telling the daemon to look, before "nobody" is believed.
             var cold = Client("6.5");
-            var first = await new PackageKitProvider(cold, [], [directory], cache: cache).ClaimAppsAsync(index, Token);
-            Assert.Equal(3, cold.Searched.Count);
+            var first = await new PackageKitProvider(cold, [], [directory], cache: cache, recheckWait: TimeSpan.Zero).ClaimAppsAsync(index, Token);
+            Assert.Equal(3, cold.Searched.Distinct().Count());
+            Assert.Equal(5, cold.Searched.Count(path => path == unowned));
+            Assert.Equal(1, cold.Nudges);
             Assert.Empty(cold.Resolved);
 
-            // Second run: one confirming request, no searches, no size lookups.
+            // Second run: one confirming request, no searches, no size lookups. The confirmed "nobody" is remembered.
             var warm = Client("6.5");
-            var second = await new PackageKitProvider(warm, [], [directory], cache: cache).ClaimAppsAsync(index, Token);
+            var second = await new PackageKitProvider(warm, [], [directory], cache: cache, recheckWait: TimeSpan.Zero).ClaimAppsAsync(index, Token);
             Assert.Empty(warm.Searched);
+            Assert.Equal(0, warm.Nudges);
             Assert.Equal(["kmail", "tabby-terminal"], Assert.Single(warm.Resolved).Order());
             Assert.Empty(Assert.Single(warm.Sized));
             Assert.Equal(first.Select(a => (a.Id, a.Version, a.SizeBytes, a.SourceId)), second.Select(a => (a.Id, a.Version, a.SizeBytes, a.SourceId)));
@@ -232,7 +248,7 @@ public class PackageKitTests
 
             // The package was updated without its launcher changing: the new version and size are picked up.
             var updated = Client("6.6");
-            var third = await new PackageKitProvider(updated, [], [directory], cache: cache).ClaimAppsAsync(index, Token);
+            var third = await new PackageKitProvider(updated, [], [directory], cache: cache, recheckWait: TimeSpan.Zero).ClaimAppsAsync(index, Token);
             Assert.Empty(updated.Searched);
             var mail = third.Single(a => a.Id == "kmail.x86_64");
             Assert.Equal("6.6", mail.Version);
@@ -242,21 +258,37 @@ public class PackageKitTests
             // A launcher that changed on disk is asked about again; the others are not.
             File.WriteAllText(tabby, "[Desktop Entry]\nName=Changed");
             var changed = Client("6.6");
-            await new PackageKitProvider(changed, [], [directory], cache: cache).ClaimAppsAsync(index, Token);
+            await new PackageKitProvider(changed, [], [directory], cache: cache, recheckWait: TimeSpan.Zero).ClaimAppsAsync(index, Token);
             Assert.Equal([tabby], changed.Searched);
 
             // A remembered owner that is no longer installed is not trusted.
             var removed = Client("6.6");
             removed.Installed.Remove("kmail");
             removed.Owners.Remove(kmail);
-            var afterRemoval = await new PackageKitProvider(removed, [], [directory], cache: cache).ClaimAppsAsync(index, Token);
-            Assert.Equal([kmail], removed.Searched);
+            var afterRemoval = await new PackageKitProvider(removed, [], [directory], cache: cache, recheckWait: TimeSpan.Zero).ClaimAppsAsync(index, Token);
+            Assert.Contains(kmail, removed.Searched);
             Assert.DoesNotContain(afterRemoval, a => a.Id == "kmail.x86_64");
         }
         finally
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public async Task A_package_installed_behind_the_daemons_back_is_found_after_telling_it_to_look_again()
+    {
+        var launcher = $"{Dir}/xterm.desktop";
+        // The daemon only knows about the new package once it has been told to look again.
+        var client = new FakeClient { OwnersAfterNudge = { [launcher] = "xterm;400;x86_64;installed:fedora" } };
+
+        var apps = await new PackageKitProvider(client, [], [Dir], recheckWait: TimeSpan.Zero)
+            .ClaimAppsAsync(new DesktopEntryIndex([Launcher(launcher, "XTerm")]), Token);
+
+        Assert.Equal("xterm.x86_64", Assert.Single(apps).Id);
+        Assert.Equal(1, client.Nudges);
+        // Found on the first look after the nudge; no further asking.
+        Assert.Equal(2, client.Searched.Count);
     }
 
     [Fact]
@@ -270,6 +302,7 @@ public class PackageKitTests
 
         Assert.Single(apps);
         Assert.Single(client.Searched);
+        Assert.Equal(0, client.Nudges);
     }
 
     [Theory]

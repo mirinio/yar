@@ -6,8 +6,9 @@
 installed on your Linux system — from your distribution, from Flathub, from the Snap
 Store, or from a file you downloaded yourself — in one friendly place.
 
-> **Status: early development (0.1, read-only).** Yar can show your apps and where
-> they come from. It cannot install, update or remove anything yet.
+> **Status: early development.** Yar shows your apps, where they come from, what is
+> on offer and where your disk space goes, and it can add, remove and switch sources.
+> It cannot install, update or remove apps yet; that is the next milestone.
 
 ## What works today
 
@@ -25,9 +26,9 @@ Store, or from a file you downloaded yourself — in one friendly place.
 - "?" buttons explain terms a newcomer may not know; "Show technical details" adds package names and IDs
 - Works through PackageKit, so the same code covers dnf, apt, zypper and pacman
 
-Developed on Fedora 44. The command-line tool has also been run in an Ubuntu 24.04
-container: apps, their origins, sources and the Store work there. Snap, the app window
-itself, openSUSE and Arch have not been tried yet.
+Developed on Fedora 44. The command-line tool is also exercised in Fedora and Ubuntu 24.04
+containers, where apps, their origins, sources and the Store work. Snap, the app window
+itself on anything but Fedora, openSUSE and Arch have not been tried yet.
 
 ## Build and run
 
@@ -42,6 +43,22 @@ dotnet run --project src/Presentation/Yar.Cli -- status --timings   # how long e
 ```
 
 `scripts/publish.sh` builds a self-contained tarball that runs without .NET installed.
+
+### Testing things that change a system
+
+Installing and removing software should not be tried out on a computer someone uses.
+`scripts/test-container.sh` starts a throwaway Fedora container (add `--distro ubuntu`
+for Ubuntu 24.04) with Flatpak and PackageKit running and `yar-apps` on the path:
+
+```bash
+scripts/test-container.sh --self-check   # prove the container can install, remove and switch things
+scripts/test-container.sh                # a shell inside it
+scripts/test-container.sh -- yar-apps apps
+```
+
+Inside it everything runs as root, which is what lets PackageKit act without a password
+prompt. That is only acceptable there; Yar never runs as root on a real system. It needs
+`podman`, and the container is deleted when it exits.
 
 ## How it is built
 

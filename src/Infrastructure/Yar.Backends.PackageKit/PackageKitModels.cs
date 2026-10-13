@@ -55,6 +55,12 @@ public interface IPackageKitClient
     /// <summary>The installed packages owning <paramref name="path"/>; normally one or none.</summary>
     Task<IReadOnlyList<PkPackage>> SearchInstalledFileAsync(string path, CancellationToken ct);
 
+    /// <summary>
+    /// Tells the daemon that packages were changed behind its back, so that it looks again.
+    /// Other tools do this after installing; a daemon that was not told can answer from an old picture.
+    /// </summary>
+    Task NotifyPackagesChangedAsync(CancellationToken ct);
+
     /// <summary>Switches a repository on or off. PackageKit asks the user for their password if needed.</summary>
     Task SetRepoEnabledAsync(string repoId, bool enabled, CancellationToken ct);
 

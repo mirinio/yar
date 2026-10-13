@@ -68,6 +68,13 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
         return repos;
     }
 
+    public async Task NotifyPackagesChangedAsync(CancellationToken ct)
+    {
+        var service = await ConnectAsync(DBusAddress.System, ct).ConfigureAwait(false);
+        // "posttrans" is what package tools send after a transaction of their own.
+        await service.CreatePackageKit(RootPath).StateHasChangedAsync("posttrans").WaitAsync(ct).ConfigureAwait(false);
+    }
+
     public Task SetRepoEnabledAsync(string repoId, bool enabled, CancellationToken ct) =>
         RunAsync(
             _ => Task.FromResult<IDisposable[]>([]),

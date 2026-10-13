@@ -11,6 +11,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     public const string ProviderId = "packagekit";
 
     private const int MaxParallelSearches = 4;
+    private const int RecheckAttempts = 4;
 
     private static readonly string[] RepoConfigDirs =
         ["/etc/yum.repos.d", "/etc/apt/sources.list.d", "/etc/zypp/repos.d"];
@@ -19,6 +20,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     private readonly IReadOnlyList<IRepoDetailReader> _detailReaders;
     private readonly IReadOnlyList<string> _launcherDirs;
     private readonly ICacheStore? _cache;
+    private readonly TimeSpan _recheckWait;
     private readonly IReadOnlyList<IRepoListFallback> _repoFallbacks;
 
     /// <param name="systemApplicationDirs">
@@ -30,8 +32,10 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
         IReadOnlyList<string> systemApplicationDirs,
         string? distroHomepage = null,
         ICacheStore? cache = null,
-        IReadOnlyList<IRepoListFallback>? repoFallbacks = null)
+        IReadOnlyList<IRepoListFallback>? repoFallbacks = null,
+        TimeSpan? recheckWait = null)
     {
+        _recheckWait = recheckWait ?? TimeSpan.FromSeconds(1.5);
         _repoFallbacks = repoFallbacks ?? [];
         _cache = cache;
         Facts = new(ProviderId, distroHomepage, RepoConfigDirs.Where(Directory.Exists)
@@ -179,7 +183,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
             {
                 if (known.Package is not null)
                     recalled[i] = known.Package;
-                // else: remembered as belonging to no package; nothing to ask.
+                // else: confirmed earlier as belonging to no package; nothing to ask.
             }
             else
             {
@@ -211,6 +215,26 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
                 var packages = await _client.SearchInstalledFileAsync(candidates[i].Path, token).ConfigureAwait(false);
                 owners[i] = (candidates[i], packages.Count > 0 ? packages[0] : null);
             }).ConfigureAwait(false);
+
+        // A launcher in a system folder that no package claims is unusual. The likelier story is that
+        // something was installed a moment ago by another tool and the daemon has not noticed. Tell it
+        // to look again; it takes a few seconds to do so, so ask a few more times before believing "nobody".
+        var unowned = pending.Where(i => owners[i].Owner is null).ToList();
+        if (unowned.Count > 0)
+        {
+            await _client.NotifyPackagesChangedAsync(ct).ConfigureAwait(false);
+            for (var attempt = 0; attempt < RecheckAttempts && unowned.Count > 0; attempt++)
+            {
+                await Task.Delay(_recheckWait, ct).ConfigureAwait(false);
+                foreach (var i in unowned)
+                {
+                    var packages = await _client.SearchInstalledFileAsync(candidates[i].Path, ct).ConfigureAwait(false);
+                    owners[i] = (candidates[i], packages.Count > 0 ? packages[0] : null);
+                }
+                unowned = unowned.Where(i => owners[i].Owner is null).ToList();
+            }
+        }
+
         // Launchers remembered as belonging to no package were not touched above; give them their entry.
         for (var i = 0; i < candidates.Count; i++)
             owners[i] = (candidates[i], owners[i].Owner);
@@ -234,6 +258,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
         var current = new Dictionary<string, OwnerCache.Owner>(StringComparer.Ordinal);
         for (var i = 0; i < candidates.Count; i++)
         {
+            // "Nobody owns this" is remembered too; by now it has been confirmed after the daemon looked again.
             if (stamps[i] is { } stamp)
                 current[candidates[i].Path] = new(stamp, owners[i].Owner is { } owner ? KeyOf(owner) : null);
         }

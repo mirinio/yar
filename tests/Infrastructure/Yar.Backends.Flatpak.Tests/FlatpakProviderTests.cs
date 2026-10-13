@@ -10,10 +10,19 @@ public class FlatpakProviderTests
     {
         public List<IReadOnlyList<string>> Calls { get; } = [];
 
+        public int SetUpCalls { get; private set; }
+
         public Task<ProcessResult> RunAsync(
             string absolutePath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
         {
-            Calls.Add(arguments);
+            // The one command the provider runs first, to let flatpak create the user's folders.
+            if (arguments is ["remotes", "--user"])
+            {
+                SetUpCalls++;
+                return Task.FromResult(new ProcessResult(0, "", ""));
+            }
+            lock (Calls)
+                Calls.Add(arguments);
             return Task.FromResult(respond(arguments));
         }
     }
@@ -282,6 +291,20 @@ public class FlatpakProviderTests
         var never = new FlatpakProvider(new FakeRunner(_ => new(1, "", "error: offline\n")), UserDir, "/usr/bin/flatpak");
         var error = await Assert.ThrowsAsync<InvalidOperationException>(() => never.GetUpdatesAsync([], Token));
         Assert.Contains("offline", error.Message);
+    }
+
+    [Fact]
+    public async Task Flatpak_is_set_up_once_before_anything_else_is_asked()
+    {
+        var runner = new FakeRunner(_ => new(0, "", ""));
+        var provider = new FlatpakProvider(runner, UserDir, "/usr/bin/flatpak");
+
+        await Task.WhenAll(
+            provider.GetSourcesAsync(Token), provider.ClaimAppsAsync(DesktopEntryIndex.Empty, Token),
+            provider.GetUpdatesAsync([], Token));
+
+        Assert.Equal(1, runner.SetUpCalls);
+        Assert.Equal(7, runner.Calls.Count);
     }
 
     [Fact]
