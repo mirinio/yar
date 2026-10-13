@@ -238,9 +238,10 @@ public sealed partial class BundleIntake(
             throw;
         }
 
-        // Most archives wrap everything in one folder; that folder is the app.
+        // Most archives wrap everything in one folder; that folder is the app. Only that one wrapper
+        // is taken off: a lone "bin" folder inside it is part of how the app is laid out.
         var root = unpacked;
-        while (Directory.EnumerateFileSystemEntries(root).Take(2).ToList() is [var only] &&
+        if (Directory.EnumerateFileSystemEntries(root).Take(2).ToList() is [var only] &&
             Directory.Exists(only) && new DirectoryInfo(only).LinkTarget is null)
         {
             root = only;

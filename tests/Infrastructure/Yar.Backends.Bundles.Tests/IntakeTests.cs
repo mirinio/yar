@@ -401,4 +401,14 @@ public sealed class IntakeTests : IDisposable
         Assert.True(File.Exists(Path.Combine(Apps, "shiny-app.AppImage")));
         Assert.Single(_manifests.ReadAll());
     }
+
+    [Fact]
+    public async Task Only_the_one_wrapping_folder_is_taken_off_an_archive()
+    {
+        var archive = MakeTarGz("tiny-1.0.tar.gz", tar => AddFile(tar, "tiny-1.0/bin/tiny", File.ReadAllBytes(RealProgram), runnable: true));
+
+        var report = await _intake.InspectAsync(archive, null, Token);
+
+        Assert.Equal("bin/tiny", Assert.Single(report.Programs).Path);
+    }
 }
