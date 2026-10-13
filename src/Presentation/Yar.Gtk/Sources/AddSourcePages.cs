@@ -41,7 +41,7 @@ internal static class AddSourcePages
                 var add = Gtk.Button.NewWithLabel(T._("Add"));
                 add.Valign = Gtk.Align.Center;
                 add.OnClicked += (_, _) => ConfirmAdd(
-                    ui, manager, new SourceRequest(suggestion.RemoteName ?? suggestion.Name, suggestion.Url),
+                    ui, suggestion.ProviderId, new SourceRequest(suggestion.RemoteName ?? suggestion.Name, suggestion.Url),
                     suggestion.Name, suggestion.Trust, suggestion.Caution, add);
                 row.AddSuffix(add);
             }
@@ -118,13 +118,13 @@ internal static class AddSourcePages
         {
             var (request, _) = SourceAddress.Check(address.GetText(), name.GetText());
             if (request is not null && manager is not null)
-                ConfirmAdd(ui, manager, request, request.Name, TrustLevel.Unknown, caution: null, add);
+                ConfirmAdd(ui, "flatpak", request, request.Name, TrustLevel.Unknown, caution: null, add);
         };
         return Widgets.Page(T._("Add a source by address"), page);
     }
 
     private static void ConfirmAdd(
-        Ui ui, ISourceManager manager, SourceRequest request, string displayName, TrustLevel trust, string? caution,
+        Ui ui, string providerId, SourceRequest request, string displayName, TrustLevel trust, string? caution,
         Gtk.Button button)
     {
         var body = trust == TrustLevel.Unknown
@@ -135,23 +135,21 @@ internal static class AddSourcePages
             body += "\n\n" + caution;
 
         Widgets.Confirm(ui, T.F("Add {0}?", displayName), body, T._("Add"), destructive: false,
-            () => Add(ui, manager, request, displayName, button));
+            () => Add(ui, providerId, request, displayName, button));
     }
 
-    private static async void Add(Ui ui, ISourceManager manager, SourceRequest request, string displayName, Gtk.Button button)
+    private static async void Add(Ui ui, string providerId, SourceRequest request, string displayName, Gtk.Button button)
     {
         button.Sensitive = false;
-        try
+        var done = await ui.Host.Make.AddSourceAsync(providerId, request, displayName);
+        if (done.Outcome == ChangeOutcome.Done)
         {
-            await manager.AddAsync(request, CancellationToken.None);
             ui.Toast(T.F("I've added {0}. Its apps will appear in the Store shortly.", displayName));
             ui.Refresh();
+            return;
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            button.Sensitive = true;
-            ui.Toast(T.F("Hmm, I couldn't add it: {0}", Short(e.Message)));
-        }
+        button.Sensitive = true;
+        ui.Toast(T.F("Hmm, I couldn't add it: {0}", Short(done.Problem ?? T._("it was cancelled"))));
     }
 
     internal static string Short(string message)

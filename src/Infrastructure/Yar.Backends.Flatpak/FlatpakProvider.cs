@@ -103,7 +103,7 @@ public sealed class FlatpakProvider
     // other people using this computer.
     public bool CanAdd => _flatpak is not null;
 
-    public async Task AddAsync(SourceRequest request, CancellationToken ct)
+    public async Task<string> AddAsync(SourceRequest request, CancellationToken ct)
     {
         var (checkedRequest, problem) = SourceAddress.Check(request.Url, request.Name);
         if (checkedRequest is null)
@@ -122,6 +122,7 @@ public sealed class FlatpakProvider
         catch (Exception e) when (e is InvalidOperationException or TimeoutException)
         {
         }
+        return SourceId("user", checkedRequest.Name);
     }
 
     /// <summary>Only sources the user added for themselves can be removed; system-wide ones are left alone.</summary>

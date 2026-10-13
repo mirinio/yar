@@ -367,7 +367,7 @@ internal static class Widgets
                 Confirm(
                     ui, T.F("Turn on {0}?", source.Name), Presentation.TrustExplanation(source.Trust),
                     T._("Turn on"), destructive: false,
-                    confirmed: () => SwitchSource(ui, manager, source, wanted, toggle, Revert),
+                    confirmed: () => SwitchSource(ui, source, wanted, toggle, Revert),
                     cancelled: Revert);
             }
             else if (!wanted && source.Trust == TrustLevel.Distro)
@@ -378,34 +378,32 @@ internal static class Widgets
                     T._("Your system gets its own apps and security updates from here. With it off, you may " +
                         "stop getting updates. Only turn it off if you know why you need to."),
                     T._("Turn off"), destructive: true,
-                    confirmed: () => SwitchSource(ui, manager, source, wanted, toggle, Revert),
+                    confirmed: () => SwitchSource(ui, source, wanted, toggle, Revert),
                     cancelled: Revert);
             }
             else
             {
-                SwitchSource(ui, manager, source, wanted, toggle, Revert);
+                SwitchSource(ui, source, wanted, toggle, Revert);
             }
         };
         return toggle;
     }
 
     private static async void SwitchSource(
-        Ui ui, ISourceManager manager, SourceInfo source, bool enabled, Gtk.Switch toggle, Action revert)
+        Ui ui, SourceInfo source, bool enabled, Gtk.Switch toggle, Action revert)
     {
         toggle.Sensitive = false;
-        try
+        var done = await ui.Host.Make.SwitchSourceAsync(source, enabled);
+        if (done.Outcome == ChangeOutcome.Done)
         {
-            await manager.SetEnabledAsync(source, enabled, CancellationToken.None);
             ui.Toast(enabled ? T.F("{0} is now turned on.", source.Name) : T.F("{0} is now turned off.", source.Name));
             ui.Refresh();
+            return;
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            // Includes the user closing the password prompt: nothing was changed.
-            revert();
-            toggle.Sensitive = true;
-            ui.Toast(T.F("I left {0} as it was: {1}", source.Name, AddSourcePages.Short(e.Message)));
-        }
+        // Includes the user closing the password prompt: nothing was changed.
+        revert();
+        toggle.Sensitive = true;
+        ui.Toast(T.F("I left {0} as it was: {1}", source.Name, AddSourcePages.Short(done.Problem ?? T._("it was cancelled"))));
     }
 
     public static Adw.ActionRow SourceRow(Ui ui, SourceInfo source)

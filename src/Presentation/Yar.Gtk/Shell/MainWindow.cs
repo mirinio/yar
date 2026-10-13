@@ -22,6 +22,8 @@ internal sealed class MainWindow
     private readonly Adw.NavigationSplitView _split = Adw.NavigationSplitView.New();
     private readonly Gtk.ListBox _sidebar = Gtk.ListBox.New();
     private readonly UpdatesPage _updates = new();
+    private readonly HistoryPage _history = new();
+    private Ui? _ui;
     private readonly Section[] _sections;
 
     private int _section;
@@ -51,6 +53,7 @@ internal sealed class MainWindow
             CreateSection("sources", T._("Sources"), "folder-download-symbolic", _sources.Widget),
             CreateSection("updates", T._("Updates"), "software-update-available-symbolic", _updates.Widget),
             CreateSection("storage", T._("Storage"), "drive-harddisk-symbolic", _storage.Widget),
+            CreateSection("history", T._("History"), "document-open-recent-symbolic", _history.Widget),
             CreateSection("opensource", T._("Open Source"), "applications-development-symbolic", _openSource.Widget),
         ];
         foreach (var section in _sections)
@@ -64,7 +67,12 @@ internal sealed class MainWindow
         _toasts.Child = _mode;
 
         _split.Sidebar = Adw.NavigationPage.New(CreateSidebar(), "Yar");
-        _split.Content = Adw.NavigationPage.New(_toasts, "Yar");
+        // The strip that shows a running change sits under every page, so it is never out of sight.
+        var content = Gtk.Box.New(Gtk.Orientation.Vertical, 0);
+        _toasts.Vexpand = true;
+        content.Append(_toasts);
+        content.Append(new OperationBar(host.Operations, OnGtkThread).Widget);
+        _split.Content = Adw.NavigationPage.New(content, "Yar");
         _window.Content = _split;
 
         // On a narrow window the sidebar folds away and the content takes the whole width;
@@ -72,6 +80,29 @@ internal sealed class MainWindow
         var narrow = Adw.Breakpoint.New(Adw.BreakpointCondition.Parse("max-width: 720sp"));
         narrow.AddSetter(_split, "collapsed", new GObject.Value(true));
         _window.AddBreakpoint(narrow);
+
+        // Closing in the middle of a change would leave it half done.
+        _window.OnCloseRequest += (_, _) =>
+        {
+            if (_host.Operations.Current is not { } running)
+                return false;
+            Widgets.Confirm(
+                _window, T._("Stop and close?"),
+                T.F("I am in the middle of this: {0}. Closing now stops it, and it may be left half done.",
+                    ChangeText.Running(running.Record)),
+                T._("Stop and close"), destructive: true, () =>
+                {
+                    _host.Operations.CancelCurrent();
+                    _window.Destroy();
+                });
+            return true;
+        };
+        // A change that ended belongs in the history at once, whether or not it altered the list of apps.
+        _host.Operations.Finished += _ => OnGtkThread(() =>
+        {
+            if (_ui is not null)
+                _history.Show(_ui);
+        });
 
         StartUp();
     }
@@ -282,6 +313,8 @@ internal sealed class MainWindow
             toast: text => _toasts.AddToast(Adw.Toast.New(text)),
             refresh: () => Refresh(ChangeKinds.All, announce: false),
             openSettings: ShowSettings);
+        _ui = ui;
+        _history.Show(ui);
         _apps.Show(ui);
         _store.Show(ui);
         _sources.Show(ui);

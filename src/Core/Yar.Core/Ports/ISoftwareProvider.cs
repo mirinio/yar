@@ -49,5 +49,6 @@ public interface ISourceManager
     /// <summary>True when this provider can add new sources at all.</summary>
     bool CanAdd { get; }
 
-    Task AddAsync(SourceRequest request, CancellationToken ct);
+    /// <summary>Adds a source and returns the ID it is listed under from then on.</summary>
+    Task<string> AddAsync(SourceRequest request, CancellationToken ct);
 }

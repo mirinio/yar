@@ -137,9 +137,9 @@ internal static class ThirdPartyGroup
         async void Change(bool wanted)
         {
             toggle.Sensitive = false;
-            try
+            var done = await host.Make.SetThirdPartyAsync(wanted, T.F("Software from outside {0}", distro));
+            if (done.Outcome == ChangeOutcome.Done)
             {
-                await host.ThirdParty.SetAllowedAsync(wanted, CancellationToken.None);
                 recorded = wanted ? ThirdPartyChoice.Allowed : ThirdPartyChoice.Declined;
                 shownOn = wanted;
                 // The tool has just switched every covered source to match the answer.
@@ -153,13 +153,13 @@ internal static class ThirdPartyGroup
                     : T._("Done. Those sources are now off."));
                 refresh();
             }
-            catch (OperationCanceledException)
+            else if (done.Outcome == ChangeOutcome.Cancelled)
             {
                 toast(T._("Nothing was changed."));
             }
-            catch (Exception e) when (e is InvalidOperationException or UnauthorizedAccessException or TimeoutException or IOException or System.ComponentModel.Win32Exception)
+            else
             {
-                toast(T.F("Hmm, that didn't work: {0}", AddSourcePages.Short(e.Message)));
+                toast(T.F("Hmm, that didn't work: {0}", AddSourcePages.Short(done.Problem ?? "")));
             }
             Show();
             toggle.Sensitive = true;

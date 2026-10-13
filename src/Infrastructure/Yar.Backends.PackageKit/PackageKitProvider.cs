@@ -62,7 +62,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     // writing system files as root, which Yar does not do.
     public bool CanAdd => false;
 
-    public Task AddAsync(SourceRequest request, CancellationToken ct) =>
+    public Task<string> AddAsync(SourceRequest request, CancellationToken ct) =>
         throw new NotSupportedException("Package sources cannot be added from here yet.");
 
     public bool CanRemove(SourceInfo source) => false;

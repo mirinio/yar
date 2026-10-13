@@ -53,4 +53,16 @@ public class ProcessRunnerTests
         await Assert.ThrowsAsync<TimeoutException>(
             () => _runner.RunAsync("/usr/bin/sleep", ["30"], TimeSpan.FromMilliseconds(200), Token));
     }
+
+    [Fact]
+    public async Task Lines_are_passed_on_while_the_program_runs()
+    {
+        var lines = new List<string>();
+
+        var result = await _runner.RunAsync(
+            "/usr/bin/printf", ["one\\ntwo 10%%\\rtwo 90%%\\n\\nlast"], Timeout, line => { lock (lines) lines.Add(line); }, Token);
+
+        Assert.Equal(["one", "two 10%", "two 90%", "last"], lines);
+        Assert.Equal("one\ntwo 10%\rtwo 90%\n\nlast", result.StdOut);
+    }
 }

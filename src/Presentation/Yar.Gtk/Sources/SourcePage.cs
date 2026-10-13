@@ -99,7 +99,7 @@ internal static class SourcePage
             remove.OnClicked += (_, _) => Widgets.Confirm(
                 ui, T.F("Remove {0}?", source.Name),
                 T._("Its apps will no longer be offered in the Store. You can add it again later."),
-                T._("Remove"), destructive: true, () => Remove(ui, remover, source, remove));
+                T._("Remove"), destructive: true, () => Remove(ui, source, remove));
             danger.Add(remove);
             page.Add(danger);
         }
@@ -107,19 +107,17 @@ internal static class SourcePage
         return Widgets.Page(source.Name, page);
     }
 
-    private static async void Remove(Ui ui, ISourceManager manager, SourceInfo source, Gtk.Button button)
+    private static async void Remove(Ui ui, SourceInfo source, Gtk.Button button)
     {
         button.Sensitive = false;
-        try
+        var done = await ui.Host.Make.RemoveSourceAsync(source);
+        if (done.Outcome == ChangeOutcome.Done)
         {
-            await manager.RemoveAsync(source, CancellationToken.None);
             ui.Toast(T.F("I've removed {0}.", source.Name));
             ui.Refresh();
+            return;
         }
-        catch (Exception e) when (e is not OutOfMemoryException)
-        {
-            button.Sensitive = true;
-            ui.Toast(T.F("Hmm, I couldn't remove it: {0}", AddSourcePages.Short(e.Message)));
-        }
+        button.Sensitive = true;
+        ui.Toast(T.F("Hmm, I couldn't remove it: {0}", AddSourcePages.Short(done.Problem ?? T._("it was cancelled"))));
     }
 }

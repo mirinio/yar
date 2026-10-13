@@ -58,8 +58,12 @@ public sealed class YarHost : IDisposable
         ];
 
         _providers = providers;
+        Journal = new FileChangeJournal(Path.Combine(Dirs.StateHome, "yar", "history.jsonl"));
+        Operations = new OperationRunner(Journal);
+        Trash = new HomeTrash(Dirs.Home, Dirs.DataHome);
         Storage = new StorageAnalyzer(new LsblkProbe(new ProcessRunner()), providers, Dirs.CacheHome, Dirs.Home);
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
+        Make = new AppChanges(providers, Operations, Trash, ThirdParty);
         Store = new StoreCatalogReader(Dirs, Cache);
         _online = new OnlineStoreData(
             Cache, Os.Name, imageDirectory: Path.Combine(Dirs.CacheHome, "yar", "images"));
@@ -106,6 +110,17 @@ public sealed class YarHost : IDisposable
     public ISourceManager? SourceManagerFor(string providerId) =>
         _providers.FirstOrDefault(p => p.Id == providerId) as ISourceManager;
 
+    /// <summary>The record of everything Yar changed on this computer.</summary>
+    public IChangeJournal Journal { get; }
+
+    /// <summary>Carries out changes one at a time and reports how far along the current one is.</summary>
+    public OperationRunner Operations { get; }
+
+    public ITrash Trash { get; }
+
+    /// <summary>The one way to change the system from Yar: recorded, queued and undoable.</summary>
+    public AppChanges Make { get; }
+
     /// <summary>Tells when something changed on this computer while Yar is open. Call Start once to begin.</summary>
     public ChangeMonitor Changes { get; }
 
@@ -115,6 +130,7 @@ public sealed class YarHost : IDisposable
     public void Dispose()
     {
         Changes.Dispose();
+        Operations.Dispose();
         _online.Dispose();
         _developer.Dispose();
         _snap.Dispose();

@@ -7,7 +7,7 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
@@ -22,6 +22,82 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 
 using var host = new YarHost();
 
+// True when a change did not go through; says why.
+static bool Failed(Yar.Core.ChangeRecord done)
+{
+    if (done.Outcome == Yar.Core.ChangeOutcome.Done)
+        return false;
+    Console.Error.WriteLine(done.Problem ?? done.Outcome.ToString());
+    return true;
+}
+
+// yar-apps history: everything Yar changed, oldest first. yar-apps undo <id> [--yes]: reverse one of them.
+if (command is "history" or "undo")
+{
+    var history = host.Journal.Read();
+    if (command == "history")
+    {
+        foreach (var entry in history)
+        {
+            var undoable = host.Make.WhyNoUndo(entry, history) is null ? "undo" : "-";
+            Console.WriteLine(
+                $"{entry.Id}  {entry.At.ToLocalTime():yyyy-MM-dd HH:mm}  {entry.Outcome,-9} {entry.Kind,-17} {undoable,-4} {entry.Name}" +
+                (entry.UndoOf is null ? "" : $"  (undo of {entry.UndoOf})") +
+                (entry.Problem is null ? "" : $"  [{entry.Problem}]"));
+        }
+        Console.WriteLine($"{history.Count} changes");
+        return 0;
+    }
+
+    var wantedId = args.Where(a => !a.StartsWith('-')).ElementAtOrDefault(1);
+    var target = history.FirstOrDefault(entry => entry.Id == wantedId);
+    if (target is null)
+    {
+        Console.Error.WriteLine("No such change. See: yar-apps history");
+        return 1;
+    }
+    if (host.Make.WhyNoUndo(target, history) is { } whyNot)
+    {
+        Console.Error.WriteLine(whyNot);
+        return 1;
+    }
+    var now = await host.Catalog.LoadAppsAsync(CancellationToken.None);
+    var step = await host.Make.PlanUndoAsync(target, now, CancellationToken.None);
+    Console.WriteLine(step.Summary);
+    if (step.Plan is not null)
+        PrintPlan(step.Plan);
+    if (step.Plan?.Blocked is not null)
+        return 1;
+    if (!args.Contains("--yes"))
+    {
+        Console.WriteLine("Nothing was changed. Add --yes to do it.");
+        return 0;
+    }
+    return Failed(await host.Make.UndoAsync(step, now)) ? 1 : 0;
+}
+
+// What a change would do, as the window's preview shows it.
+static void PrintPlan(Yar.Core.ChangePlan plan)
+{
+    static string Size(long? bytes) =>
+        bytes is { } b ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{b / 1_000_000.0:0.0} MB") : "?";
+
+    foreach (var item in plan.Items)
+        Console.WriteLine($"  {item.Name}  {Size(item.Bytes)}{(item.Detail is null ? "" : "  " + item.Detail)}");
+    if (plan.DownloadBytes is not null || plan.DiskBytes is not null)
+        Console.WriteLine($"  download {Size(plan.DownloadBytes)}, on disk {Size(plan.DiskBytes)}");
+    if (plan.DataPath is not null)
+        Console.WriteLine($"  data: {plan.DataPath} ({Size(plan.DataBytes)})");
+    foreach (var warning in plan.Warnings)
+        Console.WriteLine($"  ! {warning}");
+    foreach (var note in plan.Notes)
+        Console.WriteLine($"  - {note}");
+    if (plan.NeedsPassword)
+        Console.WriteLine("  - your system will ask for your password");
+    if (plan.Blocked is not null)
+        Console.WriteLine($"  REFUSED: {plan.Blocked}");
+}
+
 // Developer checks for the two things that change Flatpak sources. Both act only on the current user's own sources.
 if (command is "source-add" or "source-remove")
 {
@@ -35,7 +111,8 @@ if (command is "source-add" or "source-remove")
             Console.Error.WriteLine(problem);
             return 1;
         }
-        await manager.AddAsync(request, CancellationToken.None);
+        if (Failed(await host.Make.AddSourceAsync("flatpak", request, request.Name)))
+            return 1;
         Console.WriteLine($"added {request.Name}");
     }
     else
@@ -47,7 +124,8 @@ if (command is "source-add" or "source-remove")
             Console.Error.WriteLine("No such source, or not one I may remove.");
             return 1;
         }
-        await manager.RemoveAsync(source, CancellationToken.None);
+        if (Failed(await host.Make.RemoveSourceAsync(source)))
+            return 1;
         Console.WriteLine($"removed {source.Id}");
     }
     return 0;
@@ -128,7 +206,8 @@ if (command == "source-switch")
         Console.Error.WriteLine("No such source, or not one I may switch.");
         return 1;
     }
-    await manager.SetEnabledAsync(source, values[2] == "on", CancellationToken.None);
+    if (Failed(await host.Make.SwitchSourceAsync(source, values[2] == "on")))
+        return 1;
     Console.WriteLine($"{source.Id} is now {values[2]}");
     return 0;
 }

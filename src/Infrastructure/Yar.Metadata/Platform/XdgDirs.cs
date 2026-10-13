@@ -11,6 +11,7 @@ public sealed class XdgDirs
         DataHome = AbsoluteOr(getEnvironmentVariable("XDG_DATA_HOME"), Path.Combine(home, ".local", "share"));
         ConfigHome = AbsoluteOr(getEnvironmentVariable("XDG_CONFIG_HOME"), Path.Combine(home, ".config"));
         CacheHome = AbsoluteOr(getEnvironmentVariable("XDG_CACHE_HOME"), Path.Combine(home, ".cache"));
+        StateHome = AbsoluteOr(getEnvironmentVariable("XDG_STATE_HOME"), Path.Combine(home, ".local", "state"));
 
         var dataDirs = getEnvironmentVariable("XDG_DATA_DIRS");
         if (string.IsNullOrEmpty(dataDirs))
@@ -31,6 +32,9 @@ public sealed class XdgDirs
     public string DataHome { get; }
     public string ConfigHome { get; }
     public string CacheHome { get; }
+
+    /// <summary>For what should last between runs but is not a setting, such as the record of changes.</summary>
+    public string StateHome { get; }
 
     /// <summary>System data directories, most important first. Does not include <see cref="DataHome"/>.</summary>
     public IReadOnlyList<string> DataDirs { get; }
