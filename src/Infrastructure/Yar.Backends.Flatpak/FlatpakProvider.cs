@@ -5,7 +5,7 @@ namespace Yar.Backends.Flatpak;
 /// <summary>Flatpak remotes and installed Flatpak apps, read through the <c>flatpak</c> command.</summary>
 public sealed partial class FlatpakProvider
     : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider, ISharedPartsProvider,
-        IAppInstaller, IAppRemover
+        IAppInstaller, IAppRemover, IFileIntakeHandler
 {
     public const string ProviderId = "flatpak";
 

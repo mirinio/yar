@@ -7,7 +7,7 @@ namespace Yar.Backends.PackageKit;
 /// covers dnf, apt, zypper and pacman.
 /// </summary>
 public sealed partial class PackageKitProvider
-    : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider, IAppInstaller, IAppRemover
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider, IAppInstaller, IAppRemover, IFileIntakeHandler
 {
     public const string ProviderId = "packagekit";
 
@@ -23,6 +23,7 @@ public sealed partial class PackageKitProvider
     private readonly ICacheStore? _cache;
     private readonly TimeSpan _recheckWait;
     private readonly IReadOnlyList<IRepoListFallback> _repoFallbacks;
+    private readonly IProcessRunner? _runner;
 
     /// <param name="systemApplicationDirs">
     /// Directories whose launchers may belong to a package, e.g. <c>/usr/share/applications</c>.
@@ -34,8 +35,10 @@ public sealed partial class PackageKitProvider
         string? distroHomepage = null,
         ICacheStore? cache = null,
         IReadOnlyList<IRepoListFallback>? repoFallbacks = null,
-        TimeSpan? recheckWait = null)
+        TimeSpan? recheckWait = null,
+        IProcessRunner? runner = null)
     {
+        _runner = runner;
         _recheckWait = recheckWait ?? TimeSpan.FromSeconds(1.5);
         _repoFallbacks = repoFallbacks ?? [];
         _cache = cache;

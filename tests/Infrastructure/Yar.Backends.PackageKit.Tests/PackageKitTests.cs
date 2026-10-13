@@ -84,6 +84,19 @@ public partial class PackageKitTests
         public Task<IReadOnlyList<PkPackage>> SimulateRemoveAsync(IReadOnlyList<string> ids, CancellationToken ct) =>
             Task.FromResult<IReadOnlyList<PkPackage>>(Simulated);
 
+        public Task<IReadOnlyList<PkPackage>> SimulateInstallFilesAsync(IReadOnlyList<string> paths, CancellationToken ct) =>
+            SimulateFails is { } reason
+                ? Task.FromException<IReadOnlyList<PkPackage>>(new PackageKitException(1, reason))
+                : Task.FromResult<IReadOnlyList<PkPackage>>(Simulated);
+
+        public string? SimulateFails { get; set; }
+
+        public Task InstallFilesAsync(IReadOnlyList<string> paths, IProgress<PkProgress> progress, CancellationToken ct)
+        {
+            Changes.Add("install-files " + string.Join(",", paths));
+            return Task.CompletedTask;
+        }
+
         public Task InstallAsync(IReadOnlyList<string> ids, IProgress<PkProgress> progress, CancellationToken ct)
         {
             progress.Report(new(PkProgress.Download, 40, AllowCancel: true));

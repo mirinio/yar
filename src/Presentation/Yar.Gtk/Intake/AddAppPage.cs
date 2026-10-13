@@ -360,7 +360,7 @@ internal static class AddAppPage
                 ui.Toast(T.F("Hmm, I couldn't work that out: {0}", AddSourcePages.Short(e.Message)));
                 return;
             }
-            ChangeDialog.Confirm(ui, T.F("Add {0}?", plan.Name), T._("Add"), plan, async () =>
+            void LastLook() => ChangeDialog.Confirm(ui, T.F("Add {0}?", plan.Name), T._("Add"), plan, async () =>
             {
                 onAdded();
                 var done = await ui.Host.Make.AddAppAsync(ui.Host.Intake, report, choices, plan);
@@ -370,6 +370,21 @@ internal static class AddAppPage
                     ui.Host.Downloader.Discard(report.SourcePath);
                 ChangeDialog.Report(ui, done, T.F("{0} is added. You find it under My Apps and in your app menu.", plan.Name));
             });
+
+            // A package from a website gets administrator rights while it installs; that deserves its own yes.
+            if (report.Kind == BundleKind.Package && plan.Blocked is null)
+            {
+                Widgets.Confirm(
+                    ui, T._("Install a package nobody has checked?"),
+                    T._("Apps from the Store were checked by your distribution or by Flathub. This file was not. While it " +
+                        "is installed, it can change anything on this computer.\n\nGo on only if you got it from the " +
+                        "maker's own website and trust them."),
+                    T._("I trust it, go on"), destructive: true, LastLook);
+            }
+            else
+            {
+                LastLook();
+            }
         };
 
         return page;

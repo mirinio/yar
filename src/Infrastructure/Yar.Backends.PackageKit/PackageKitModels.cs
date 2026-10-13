@@ -122,4 +122,13 @@ public interface IPackageKitClient
     /// <param name="allowDependents">Also remove the packages that cannot stay without these.</param>
     Task RemoveAsync(
         IReadOnlyList<string> packageIds, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct);
+
+    /// <summary>Everything installing these package files would install or remove, without doing it.</summary>
+    Task<IReadOnlyList<PkPackage>> SimulateInstallFilesAsync(IReadOnlyList<string> paths, CancellationToken ct);
+
+    /// <summary>
+    /// Installs package files the user brought. Unlike <see cref="InstallAsync"/> this accepts packages
+    /// nobody the system knows has signed, so it is only for files the user explicitly vouched for.
+    /// </summary>
+    Task InstallFilesAsync(IReadOnlyList<string> paths, IProgress<PkProgress> progress, CancellationToken ct);
 }

@@ -53,7 +53,8 @@ public sealed class YarHost : IDisposable
             Dirs.DataDirs.Select(d => Path.Combine(d, "applications")).ToList(),
             Os.HomeUrl,
             Cache,
-            [new AptListsReader()]);
+            [new AptListsReader()],
+            runner: new ProcessRunner());
 
         // Claim order matters: each provider only sees the launchers the earlier ones left.
         ISoftwareProvider[] providers =
@@ -76,7 +77,14 @@ public sealed class YarHost : IDisposable
             new IntakePlaces(
                 Dirs.Home, Path.Combine(Dirs.CacheHome, "yar"), Dirs.UserApplicationsDir,
                 Path.Combine(Dirs.DataHome, "yar", "icons")),
-            manifests, new ProcessRunner(), Trash, new BundleInspector(new LibraryFinder()));
+            manifests, new ProcessRunner(), Trash, new BundleInspector(new LibraryFinder()),
+            new Dictionary<string, IFileIntakeHandler>
+            {
+                ["rpm"] = packageKit,
+                ["deb"] = packageKit,
+                ["flatpakref"] = flatpak,
+                ["flatpak"] = flatpak,
+            });
         Store = new StoreCatalogReader(Dirs, Cache);
         _online = new OnlineStoreData(
             Cache, Os.Name, imageDirectory: Path.Combine(Dirs.CacheHome, "yar", "images"));

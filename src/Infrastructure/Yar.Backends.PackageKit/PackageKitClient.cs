@@ -133,6 +133,13 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     public Task InstallAsync(IReadOnlyList<string> packageIds, IProgress<PkProgress> progress, CancellationToken ct) =>
         ChangeAsync(transaction => transaction.InstallPackagesAsync(FlagOnlyTrusted, [.. packageIds]), progress, ct);
 
+    public Task<IReadOnlyList<PkPackage>> SimulateInstallFilesAsync(IReadOnlyList<string> paths, CancellationToken ct) =>
+        CollectPackagesAsync(transaction => transaction.InstallFilesAsync(FlagSimulate, [.. paths]), ct);
+
+    // No ONLY_TRUSTED here: a file from a website is rarely signed by a key the system has.
+    public Task InstallFilesAsync(IReadOnlyList<string> paths, IProgress<PkProgress> progress, CancellationToken ct) =>
+        ChangeAsync(transaction => transaction.InstallFilesAsync(0, [.. paths]), progress, ct);
+
     // autoremove stays off: taking away what "nothing needs any more" is a decision of its own.
     public Task RemoveAsync(
         IReadOnlyList<string> packageIds, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct) =>

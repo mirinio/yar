@@ -106,6 +106,76 @@ else
   ! have && pass "it is gone again" || fail "it is gone again"
 fi
 
+step "Yar adds apps brought as files, each kind its standard way"
+work=/tmp/brought; rm -rf "$work"; mkdir -p "$work/cool-tool-2.4.1/bin"; cd "$work"
+cp /usr/bin/true cool-tool-2.4.1/bin/cool-tool
+printf '[Desktop Entry]\nType=Application\nName=Cool Tool\nComment=Does cool things\nExec=cool-tool\n' > cool-tool-2.4.1/cool-tool.desktop
+tar -czf cool-tool-2.4.1-linux-x86_64.tar.gz cool-tool-2.4.1
+yar-apps inspect cool-tool-2.4.1-linux-x86_64.tar.gz 2>&1 | sed 's/^/        /'
+check "Yar adds an app from an archive" yar-apps add cool-tool-2.4.1-linux-x86_64.tar.gz --yes
+[ -x "$HOME/Applications/cool-tool/bin/cool-tool" ] && [ -f "$HOME/.local/share/applications/yar-cool-tool.desktop" ] \
+  && pass "it has a folder of its own and an app-menu entry" || fail "it has a folder of its own and an app-menu entry"
+lists "cool tool" && pass "Yar lists Cool Tool" || fail "Yar lists Cool Tool"
+check "Yar removes it" yar-apps remove yar-cool-tool.desktop --yes
+[ ! -e "$HOME/Applications/cool-tool" ] && [ -x "$HOME/.local/share/Trash/files/cool-tool/bin/cool-tool" ] \
+  && pass "its folder is in the Trash, not erased" || fail "its folder is in the Trash, not erased"
+check "Yar undoes the removal" yar-apps undo "$(last)" --yes
+[ -x "$HOME/Applications/cool-tool/bin/cool-tool" ] && lists "cool tool" && pass "Cool Tool is back" || fail "Cool Tool is back"
+check "Yar undoes adding it in the first place" yar-apps undo "$(yar-apps history | awk '$5 == "AddApp" && $6 == "undo" { print $1; exit }')" --yes
+[ ! -e "$HOME/Applications/cool-tool" ] && pass "Cool Tool is gone again" || fail "Cool Tool is gone again"
+
+cp /usr/bin/true Shiny_App-1.2.3-x86_64.AppImage; printf 'AI\002' | dd of=Shiny_App-1.2.3-x86_64.AppImage bs=1 seek=8 conv=notrunc 2>/dev/null
+right="$(sha256sum Shiny_App-1.2.3-x86_64.AppImage | cut -d' ' -f1)"
+wrong="$(printf x | sha256sum | cut -d' ' -f1)"
+yar-apps add Shiny_App-1.2.3-x86_64.AppImage --hash "$wrong" --yes >/tmp/check.log 2>&1 && fail "a file that does not match the publisher's hash is refused" || pass "a file that does not match the publisher's hash is refused"
+grep -h 'NO ' /tmp/check.log | sed 's/^/        /'
+[ ! -e "$HOME/Applications/shiny-app.AppImage" ] && pass "and nothing of it was installed" || fail "and nothing of it was installed"
+check "with the right hash Yar adds the AppImage" yar-apps add Shiny_App-1.2.3-x86_64.AppImage --hash "$right  Shiny_App-1.2.3-x86_64.AppImage" --yes
+[ -x "$HOME/Applications/shiny-app.AppImage" ] && pass "it is one runnable file in the apps folder" || fail "it is one runnable file in the apps folder"
+said="$(yar-apps verify "Shiny App" 2>&1)"; echo "$said" | grep -q '^unchanged' && pass "checked again, it is unchanged" || fail "checked again, it is unchanged"
+echo tampered >> "$HOME/Applications/shiny-app.AppImage"
+yar-apps verify "Shiny App" >/tmp/check.log 2>&1 && fail "a file changed afterwards is noticed" || pass "a file changed afterwards is noticed"
+check "Yar removes the AppImage" yar-apps remove "Shiny App" --yes
+
+mkdir payload && echo gotcha > payload/x && tar -cf hostile.tar --transform 's|^payload|../../escaped|' payload 2>/dev/null
+yar-apps add hostile.tar --yes >/tmp/check.log 2>&1 && fail "an archive that reaches outside its folder is refused" || pass "an archive that reaches outside its folder is refused"
+grep -h 'NO ' /tmp/check.log | sed 's/^/        /'
+! find / -xdev -name escaped -not -path '/proc/*' 2>/dev/null | grep -q . && pass "and nothing escaped" || fail "and nothing escaped"
+printf 'MZ\220\000' > setup.exe; printf '#!/bin/sh\necho hi\n' > install.run
+said="$(yar-apps inspect setup.exe 2>&1)"; echo "$said" | grep -q 'Windows' && pass "a Windows program is explained, not installed" || fail "a Windows program is explained, not installed"
+said="$(yar-apps inspect install.run 2>&1)"; echo "$said" | grep -q 'script' && pass "an installer script is explained, not installed" || fail "an installer script is explained, not installed"
+
+step "A package file goes through the package manager"
+if command -v dnf >/dev/null; then (dnf download -q galculator >/dev/null 2>&1); other=x.deb; printf '!<arch>\ndebian-binary   1234' > "$other"
+else (apt-get download -qq galculator >/dev/null 2>&1); other=x.rpm; printf '\355\253\356\333\003\000' > "$other"; fi
+pkgfile="$(ls galculator*.rpm galculator*.deb 2>/dev/null | head -1)"
+if [ -z "$pkgfile" ]; then
+  fail "a package file could be fetched to test with"
+else
+  yar-apps inspect "$pkgfile" 2>&1 | sed 's/^/        /'
+  yar-apps add "$pkgfile" --yes >/tmp/check.log 2>&1 && fail "without --unsigned-ok a package file is not installed" || pass "without --unsigned-ok a package file is not installed"
+  yar-apps add "$pkgfile" --yes --unsigned-ok >/tmp/install.log 2>&1 && pass "Yar installs the package file" || { fail "Yar installs the package file"; tail -6 /tmp/install.log; }
+  pkg_target="$(awk '/^done \(/ { print $3 }' /tmp/install.log)"
+  if command -v rpm >/dev/null; then rpm -q galculator >/dev/null 2>&1; else dpkg -s galculator 2>/dev/null | grep -q '^Status: install ok installed'; fi \
+    && pass "the package manager agrees it is installed" || fail "the package manager agrees it is installed"
+  check "Yar removes it again" yar-apps remove "$pkg_target" --yes
+fi
+said="$(yar-apps inspect "$other" 2>&1)"; echo "$said" | grep -q "can't be installed here" && pass "a package for the other kind of system is explained" || fail "a package for the other kind of system is explained"
+
+step "A download link and a Flatpak file"
+yar-apps add http://example.org/app.AppImage >/tmp/check.log 2>&1 && fail "an unprotected link is refused" || pass "an unprotected link is refused"
+if yar-apps add https://dl.flathub.org/repo/appstream/com.github.tchx84.Flatseal.flatpakref --yes >/tmp/install.log 2>&1; then
+  pass "Yar downloads a .flatpakref from a link and installs the app it points to"
+  sed -n '1,6p' /tmp/install.log | sed 's/^/        /'
+  flatpak list --user --app --columns=application | grep -qx com.github.tchx84.Flatseal && pass "flatpak agrees it is installed" || fail "flatpak agrees it is installed"
+  check "Yar removes it" yar-apps remove com.github.tchx84.Flatseal --yes
+  [ -z "$(ls -A "$HOME/.cache/yar/downloads" 2>/dev/null)" ] && pass "the downloaded file was not kept" || fail "the downloaded file was not kept"
+else
+  fail "Yar downloads a .flatpakref from a link and installs the app it points to"; tail -6 /tmp/install.log
+fi
+flatpak uninstall --user --noninteractive --unused >/dev/null 2>&1
+cd /
+
 step "A package source can be switched through Yar (the switch that needs a password on a real system)"
 source_id="$(yar-apps sources 2>/dev/null | awk '$1 == "packagekit" && $3 == "off" { print $2; exit }')"
 if [ -n "$source_id" ]; then

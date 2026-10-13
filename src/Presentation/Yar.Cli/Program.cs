@@ -190,7 +190,29 @@ if (command is "inspect" or "add")
         return 2;
     }
 
-    var report = await host.Intake.InspectAsync(plain[1], originUrl: null, CancellationToken.None);
+    // A link is downloaded first and then looked at like any file.
+    string? fetched = null, cameFrom = null;
+    if (plain[1].StartsWith("http", StringComparison.OrdinalIgnoreCase))
+    {
+        var (link, linkProblem) = Yar.Core.DownloadLink.Check(plain[1]);
+        if (link is null)
+        {
+            Console.Error.WriteLine(linkProblem);
+            return 1;
+        }
+        var info = await host.Downloader.ProbeAsync(link, CancellationToken.None);
+        Console.WriteLine($"downloading {info.FileName} ({(info.Bytes is { } size ? $"{size / 1_000_000.0:0.0} MB" : "size unknown")}) from {info.Address.Host}");
+        fetched = await host.Downloader.DownloadAsync(info, new Progress<long>(), CancellationToken.None);
+        cameFrom = info.Address.AbsoluteUri;
+    }
+    void Forget(Yar.Core.IntakeReport seen)
+    {
+        host.Intake.Discard(seen);
+        if (fetched is not null)
+            host.Downloader.Discard(fetched);
+    }
+
+    var report = await host.Intake.InspectAsync(fetched ?? plain[1], cameFrom, CancellationToken.None);
     Console.WriteLine($"{report.FileName}: {report.KindLabel}");
     Console.WriteLine($"  name: {report.SuggestedName}{(report.Summary is null ? "" : $" - {report.Summary}")}");
     Console.WriteLine($"  icon: {report.IconPath ?? (report.IconComesWithIt ? "comes with it" : "none found")}");
@@ -208,7 +230,7 @@ if (command is "inspect" or "add")
         if (published is null)
         {
             Console.Error.WriteLine(problem ?? "No hash given.");
-            host.Intake.Discard(report);
+            Forget(report);
             return 1;
         }
         verified = await Yar.Core.HashCheck.MatchesAsync(report.SourcePath, published, CancellationToken.None);
@@ -217,14 +239,14 @@ if (command is "inspect" or "add")
             : $"  NO  Does not match the {published.KindName} hash you gave: this is not the file the publisher describes.");
         if (!verified)
         {
-            host.Intake.Discard(report);
+            Forget(report);
             return 1;
         }
     }
 
     if (command == "inspect" || report.Blocked is not null)
     {
-        host.Intake.Discard(report);
+        Forget(report);
         return report.Blocked is null ? 0 : 1;
     }
 
@@ -233,14 +255,20 @@ if (command is "inspect" or "add")
         IconPath = given.TryGetValue("--icon", out var picture) ? Path.GetFullPath(picture) : report.IconPath,
         Program = given.GetValueOrDefault("--program"),
         AppMenu = !args.Contains("--no-menu"),
-        DeleteOriginal = args.Contains("--move"),
+        DeleteOriginal = fetched is not null || args.Contains("--move"),
         HashVerified = verified,
     };
     var addPlan = await host.Intake.PlanAsync(report, choices, CancellationToken.None);
     PrintPlan(addPlan);
+    if (addPlan.Blocked is null && report.Kind == Yar.Core.BundleKind.Package && args.Contains("--yes") && !args.Contains("--unsigned-ok"))
+    {
+        Console.Error.WriteLine("A package from a file is installed with administrator rights and unchecked. Add --unsigned-ok to say you trust it.");
+        Forget(report);
+        return 1;
+    }
     if (addPlan.Blocked is not null || !args.Contains("--yes"))
     {
-        host.Intake.Discard(report);
+        Forget(report);
         if (addPlan.Blocked is null)
             Console.WriteLine("Nothing was changed. Add --yes to do it.");
         return addPlan.Blocked is null ? 0 : 1;
@@ -248,9 +276,11 @@ if (command is "inspect" or "add")
     var added = await host.Make.AddAppAsync(host.Intake, report, choices, addPlan);
     if (Failed(added))
     {
-        host.Intake.Discard(report);
+        Forget(report);
         return 1;
     }
+    if (fetched is not null)
+        host.Downloader.Discard(fetched);
     Console.WriteLine($"done ({added.Id}) {added.Target}");
     return 0;
 }
