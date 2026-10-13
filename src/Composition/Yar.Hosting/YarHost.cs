@@ -43,20 +43,24 @@ public sealed class YarHost : IDisposable
         var desktops = (Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ?? "")
             .Split(':', StringSplitOptions.RemoveEmptyEntries);
 
+        var manifests = new ManifestStore(Path.Combine(Dirs.DataHome, "yar", "apps"));
+        var flatpak = new FlatpakProvider(
+            new ProcessRunner(), flatpakUserDir, appDataDir: Path.Combine(Dirs.Home, ".var", "app"),
+            trash: Trash);
+        var packageKit = new PackageKitProvider(
+            _packageKit, [RepoFileReader.ForSystem()],
+            Dirs.DataDirs.Select(d => Path.Combine(d, "applications")).ToList(),
+            Os.HomeUrl,
+            Cache,
+            [new AptListsReader()]);
+
         // Claim order matters: each provider only sees the launchers the earlier ones left.
         ISoftwareProvider[] providers =
         [
-            new FlatpakProvider(
-                new ProcessRunner(), flatpakUserDir, appDataDir: Path.Combine(Dirs.Home, ".var", "app"),
-                trash: Trash),
+            flatpak,
             _snap,
-            new PackageKitProvider(
-                _packageKit, [RepoFileReader.ForSystem()],
-                Dirs.DataDirs.Select(d => Path.Combine(d, "applications")).ToList(),
-                Os.HomeUrl,
-                Cache,
-                [new AptListsReader()]),
-            ManualAppsProvider.ForUser(Dirs, path),
+            packageKit,
+            ManualAppsProvider.ForUser(Dirs, path, manifests, Trash),
         ];
 
         _providers = providers;
@@ -65,6 +69,12 @@ public sealed class YarHost : IDisposable
         Storage = new StorageAnalyzer(new LsblkProbe(new ProcessRunner()), providers, Dirs.CacheHome, Dirs.Home);
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
         Make = new AppChanges(providers, Operations, Trash, ThirdParty);
+        DefaultAppsFolder = Path.Combine(Dirs.Home, "Applications");
+        Intake = new BundleIntake(
+            new IntakePlaces(
+                Dirs.Home, Path.Combine(Dirs.CacheHome, "yar"), Dirs.UserApplicationsDir,
+                Path.Combine(Dirs.DataHome, "yar", "icons")),
+            manifests, new ProcessRunner(), Trash, new BundleInspector(new LibraryFinder()));
         Store = new StoreCatalogReader(Dirs, Cache);
         _online = new OnlineStoreData(
             Cache, Os.Name, imageDirectory: Path.Combine(Dirs.CacheHome, "yar", "images"));
@@ -118,6 +128,12 @@ public sealed class YarHost : IDisposable
     public OperationRunner Operations { get; }
 
     public ITrash Trash { get; }
+
+    /// <summary>Takes apps the user brings as a file or a link.</summary>
+    public IAppIntake Intake { get; }
+
+    /// <summary>Where added apps go unless the user chose another folder: <c>~/Applications</c>.</summary>
+    public string DefaultAppsFolder { get; }
 
     /// <summary>The one way to change the system from Yar: recorded, queued and undoable.</summary>
     public AppChanges Make { get; }

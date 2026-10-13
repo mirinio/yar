@@ -5,9 +5,10 @@ namespace Yar.Backends.Bundles;
 
 /// <summary>
 /// Apps no package manager knows about: launchers the user (or an installer script) created,
-/// and AppImages lying around in the usual download folders. Read-only.
+/// AppImages lying around in the usual download folders, and the apps Yar itself added from a
+/// file. Those last ones come with a note of what was created, so they can be removed exactly.
 /// </summary>
-public sealed class ManualAppsProvider : ISoftwareProvider
+public sealed partial class ManualAppsProvider : ISoftwareProvider, IAppRemover, IIntegrityChecker
 {
     public const string ProviderId = "manual";
     public const string SourceId = "manual";
@@ -17,19 +18,25 @@ public sealed class ManualAppsProvider : ISoftwareProvider
     private readonly List<string> _launcherDirs;
     private readonly IReadOnlyList<string> _appImageDirs;
     private readonly IReadOnlyList<string> _searchPath;
+    private readonly ManifestStore? _manifests;
+    private readonly ITrash? _trash;
 
     /// <param name="launcherDirs">Directories whose leftover launchers count as manual, e.g. the user's applications dir.</param>
     /// <param name="appImageDirs">Directories to look in for AppImages. Not searched recursively.</param>
     /// <param name="searchPath">The <c>PATH</c> used to find the program a launcher starts.</param>
     public ManualAppsProvider(
-        IReadOnlyList<string> launcherDirs, IReadOnlyList<string> appImageDirs, IReadOnlyList<string> searchPath)
+        IReadOnlyList<string> launcherDirs, IReadOnlyList<string> appImageDirs, IReadOnlyList<string> searchPath,
+        ManifestStore? manifests = null, ITrash? trash = null)
     {
+        _manifests = manifests;
+        _trash = trash;
         _launcherDirs = launcherDirs.Select(d => d.TrimEnd('/') + "/").ToList();
         _appImageDirs = appImageDirs;
         _searchPath = searchPath;
     }
 
-    public static ManualAppsProvider ForUser(XdgDirs dirs, string? pathVariable) => new(
+    public static ManualAppsProvider ForUser(
+        XdgDirs dirs, string? pathVariable, ManifestStore? manifests = null, ITrash? trash = null) => new(
         launcherDirs: [dirs.UserApplicationsDir, "/usr/local/share/applications"],
         appImageDirs:
         [
@@ -38,7 +45,8 @@ public sealed class ManualAppsProvider : ISoftwareProvider
             Path.Combine(dirs.Home, "Downloads"),
             Path.Combine(dirs.Home, ".local", "bin"),
         ],
-        searchPath: (pathVariable ?? "/usr/local/bin:/usr/bin:/bin").Split(':', StringSplitOptions.RemoveEmptyEntries));
+        searchPath: (pathVariable ?? "/usr/local/bin:/usr/bin:/bin").Split(':', StringSplitOptions.RemoveEmptyEntries),
+        manifests, trash);
 
     public string Id => ProviderId;
 
@@ -65,6 +73,15 @@ public sealed class ManualAppsProvider : ISoftwareProvider
         {
             var apps = new List<AppInfo>();
             var launchedPrograms = new HashSet<string>(StringComparer.Ordinal);
+            var notes = _manifests?.ReadAll() ?? [];
+            var used = new HashSet<string>(StringComparer.Ordinal);
+            AppInfo Noted(AppInfo app, Func<InstalledManifest, bool> isIts)
+            {
+                if (notes.FirstOrDefault(isIts) is not { } note)
+                    return app;
+                used.Add(note.Id);
+                return WithNote(app, note, ct);
+            }
 
             foreach (var entry in unclaimed.Entries.Where(IsManualLauncher))
             {
@@ -72,13 +89,23 @@ public sealed class ManualAppsProvider : ISoftwareProvider
                 var program = DesktopExec.ResolveProgram(entry.Exec, _searchPath);
                 if (program is not null)
                     launchedPrograms.Add(program);
-                apps.Add(FromLauncher(entry, program));
+                apps.Add(Noted(FromLauncher(entry, program), note => note.LauncherPath == entry.Path));
             }
 
             foreach (var (path, type) in FindAppImages(ct))
             {
                 if (!launchedPrograms.Contains(path))
-                    apps.Add(FromAppImage(path, type));
+                    apps.Add(Noted(FromAppImage(path, type), note => note.InstallPath == path));
+            }
+
+            // Apps Yar added without an app-menu entry are known only from their note.
+            foreach (var note in notes.Where(n => !used.Contains(n.Id) && n.LauncherPath is null))
+            {
+                if ((File.Exists(note.InstallPath) || Directory.Exists(note.InstallPath)) &&
+                    apps.All(app => app.InstallPath != note.InstallPath) && !launchedPrograms.Contains(note.Program ?? ""))
+                {
+                    apps.Add(WithNote(FromNote(note), note, ct));
+                }
             }
 
             return apps;

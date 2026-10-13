@@ -7,7 +7,7 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove" or "inspect" or "add" or "verify"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
@@ -168,6 +168,109 @@ if (command is "install" or "remove")
         return 1;
     Console.WriteLine($"done ({done.Id}) {done.Target}{(done.Trashed.Count > 0 ? $", {done.Trashed.Count} moved to the Trash" : "")}");
     return 0;
+}
+
+// yar-apps inspect <file>: what the file is and whether it can run here. Changes nothing.
+// yar-apps add <file> [--name N] [--icon picture] [--to folder] [--program path] [--hash H] [--no-menu] [--move] [--yes]
+if (command is "inspect" or "add")
+{
+    var valued = new[] { "--name", "--icon", "--to", "--program", "--hash" };
+    var given = new Dictionary<string, string>(StringComparer.Ordinal);
+    var plain = new List<string>();
+    for (var i = 0; i < args.Length; i++)
+    {
+        if (valued.Contains(args[i]) && i + 1 < args.Length)
+            given[args[i]] = args[++i];
+        else if (!args[i].StartsWith('-'))
+            plain.Add(args[i]);
+    }
+    if (plain.Count < 2)
+    {
+        Console.Error.WriteLine("Which file?");
+        return 2;
+    }
+
+    var report = await host.Intake.InspectAsync(plain[1], originUrl: null, CancellationToken.None);
+    Console.WriteLine($"{report.FileName}: {report.KindLabel}");
+    Console.WriteLine($"  name: {report.SuggestedName}{(report.Summary is null ? "" : $" - {report.Summary}")}");
+    Console.WriteLine($"  icon: {report.IconPath ?? (report.IconComesWithIt ? "comes with it" : "none found")}");
+    if (report.Sha256.Length > 0)
+        Console.WriteLine($"  sha256: {report.Sha256}");
+    foreach (var program in report.Programs)
+        Console.WriteLine($"  program: {program.Label}");
+    foreach (var check in report.Checks)
+        Console.WriteLine($"  {(check.State == Yar.Core.CheckState.Good ? "ok " : check.State == Yar.Core.CheckState.Warning ? " ! " : "NO ")} {check.Text}");
+
+    var verified = false;
+    if (given.TryGetValue("--hash", out var pasted) && report.Blocked is null)
+    {
+        var (published, problem) = Yar.Core.HashCheck.Parse(pasted, report.FileName);
+        if (published is null)
+        {
+            Console.Error.WriteLine(problem ?? "No hash given.");
+            host.Intake.Discard(report);
+            return 1;
+        }
+        verified = await Yar.Core.HashCheck.MatchesAsync(report.SourcePath, published, CancellationToken.None);
+        Console.WriteLine(verified
+            ? $"  ok  Matches the {published.KindName} hash you gave{(published.Weak ? " (an old kind of hash that proves little)" : "")}."
+            : $"  NO  Does not match the {published.KindName} hash you gave: this is not the file the publisher describes.");
+        if (!verified)
+        {
+            host.Intake.Discard(report);
+            return 1;
+        }
+    }
+
+    if (command == "inspect" || report.Blocked is not null)
+    {
+        host.Intake.Discard(report);
+        return report.Blocked is null ? 0 : 1;
+    }
+
+    var choices = new Yar.Core.IntakeChoices(given.GetValueOrDefault("--name") ?? report.SuggestedName, Path.GetFullPath(given.GetValueOrDefault("--to") ?? host.DefaultAppsFolder))
+    {
+        IconPath = given.TryGetValue("--icon", out var picture) ? Path.GetFullPath(picture) : report.IconPath,
+        Program = given.GetValueOrDefault("--program"),
+        AppMenu = !args.Contains("--no-menu"),
+        DeleteOriginal = args.Contains("--move"),
+        HashVerified = verified,
+    };
+    var addPlan = await host.Intake.PlanAsync(report, choices, CancellationToken.None);
+    PrintPlan(addPlan);
+    if (addPlan.Blocked is not null || !args.Contains("--yes"))
+    {
+        host.Intake.Discard(report);
+        if (addPlan.Blocked is null)
+            Console.WriteLine("Nothing was changed. Add --yes to do it.");
+        return addPlan.Blocked is null ? 0 : 1;
+    }
+    var added = await host.Make.AddAppAsync(host.Intake, report, choices, addPlan);
+    if (Failed(added))
+    {
+        host.Intake.Discard(report);
+        return 1;
+    }
+    Console.WriteLine($"done ({added.Id}) {added.Target}");
+    return 0;
+}
+
+// yar-apps verify <app id or name>: is a single-file app still the file that was added?
+if (command == "verify")
+{
+    var wantedApp = args.Where(a => !a.StartsWith('-')).ElementAtOrDefault(1) ?? "";
+    var all = await host.Catalog.LoadAppsAsync(CancellationToken.None);
+    var found = all.Apps.Where(a => a.Id == wantedApp || a.Name.Equals(wantedApp, StringComparison.OrdinalIgnoreCase)).ToList();
+    if (found.Count != 1 || host.Ability<Yar.Core.IIntegrityChecker>(found[0].ProviderId) is not { } checker)
+    {
+        Console.Error.WriteLine("No single app matches that I keep a hash for.");
+        return 1;
+    }
+    var result = await checker.CheckAsync(found[0], CancellationToken.None);
+    Console.WriteLine($"when added: {result.Sha256WhenAdded ?? "not recorded"}{(result.WasVerified ? " (matched the publisher's hash)" : "")}");
+    Console.WriteLine($"now:        {result.Sha256Now ?? "not a single file"}");
+    Console.WriteLine(result.Unchanged switch { true => "unchanged", false => "CHANGED since it was added", _ => "nothing to compare" });
+    return result.Unchanged == false ? 1 : 0;
 }
 
 // What a change would do, as the window's preview shows it.

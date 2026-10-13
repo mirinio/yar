@@ -67,6 +67,23 @@ public sealed class AppChanges(
                 }
             });
 
+    /// <summary>Adds an app the user brought as a file, as previewed in <paramref name="plan"/>.</summary>
+    public Task<ChangeRecord> AddAppAsync(IAppIntake intake, IntakeReport report, IntakeChoices choices, ChangePlan plan) =>
+        runner.RunAsync(
+            ChangeRecord.Begin(ChangeKind.AddApp, plan.ProviderId, plan.Target, plan.Name) with
+            {
+                Origin = report.OriginUrl ?? report.FileName,
+                Checksum = report.Sha256.Length > 0 ? report.Sha256 : null,
+                ChecksumVerified = choices.HashVerified,
+                Undo = plan.Technical,
+            },
+            async context =>
+            {
+                Refuse(plan);
+                var added = await intake.AddAsync(report, choices, plan, context.Progress, context.Ct).ConfigureAwait(false);
+                context.Amend(record => record with { ProviderId = added.ProviderId, Target = added.AppId, Name = added.Name });
+            });
+
     /// <summary>Carries out a plan from <see cref="IAppRemover.PlanRemovalAsync"/>.</summary>
     public Task<ChangeRecord> RemoveAsync(ChangePlan plan, bool removeData, string? undoOf = null) =>
         runner.RunAsync(
