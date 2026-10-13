@@ -3,8 +3,9 @@ using Yar.Core;
 namespace Yar.Backends.Flatpak;
 
 /// <summary>Flatpak remotes and installed Flatpak apps, read through the <c>flatpak</c> command.</summary>
-public sealed class FlatpakProvider
-    : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider, ISharedPartsProvider
+public sealed partial class FlatpakProvider
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider, ISharedPartsProvider,
+        IAppInstaller, IAppRemover
 {
     public const string ProviderId = "flatpak";
 
@@ -30,6 +31,7 @@ public sealed class FlatpakProvider
     private readonly string _userInstallationDir;
     private readonly string _systemInstallationDir;
     private readonly string? _appDataDir;
+    private readonly ITrash? _trash;
     private readonly Lock _setUpGate = new();
     private Task? _setUp;
 
@@ -37,8 +39,9 @@ public sealed class FlatpakProvider
     /// <param name="flatpakPath">Absolute path of the flatpak command; located automatically when null.</param>
     public FlatpakProvider(
         IProcessRunner runner, string userInstallationDir, string? flatpakPath = null,
-        string systemInstallationDir = "/var/lib/flatpak", string? appDataDir = null)
+        string systemInstallationDir = "/var/lib/flatpak", string? appDataDir = null, ITrash? trash = null)
     {
+        _trash = trash;
         _appDataDir = appDataDir;
         _systemInstallationDir = systemInstallationDir.TrimEnd('/') + "/";
         _runner = runner;

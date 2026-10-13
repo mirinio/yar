@@ -32,6 +32,7 @@ public sealed class YarHost : IDisposable
         SearchPath = (path ?? "/usr/local/bin:/usr/bin:/bin").Split(':', StringSplitOptions.RemoveEmptyEntries);
 
         var flatpakUserDir = Path.Combine(Dirs.DataHome, "flatpak");
+        Trash = new HomeTrash(Dirs.Home, Dirs.DataHome);
         Changes = new ChangeMonitor(
         [
             FileChangeSource.ForLaunchers(Dirs),
@@ -46,7 +47,8 @@ public sealed class YarHost : IDisposable
         ISoftwareProvider[] providers =
         [
             new FlatpakProvider(
-                new ProcessRunner(), flatpakUserDir, appDataDir: Path.Combine(Dirs.Home, ".var", "app")),
+                new ProcessRunner(), flatpakUserDir, appDataDir: Path.Combine(Dirs.Home, ".var", "app"),
+                trash: Trash),
             _snap,
             new PackageKitProvider(
                 _packageKit, [RepoFileReader.ForSystem()],
@@ -60,7 +62,6 @@ public sealed class YarHost : IDisposable
         _providers = providers;
         Journal = new FileChangeJournal(Path.Combine(Dirs.StateHome, "yar", "history.jsonl"));
         Operations = new OperationRunner(Journal);
-        Trash = new HomeTrash(Dirs.Home, Dirs.DataHome);
         Storage = new StorageAnalyzer(new LsblkProbe(new ProcessRunner()), providers, Dirs.CacheHome, Dirs.Home);
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
         Make = new AppChanges(providers, Operations, Trash, ThirdParty);

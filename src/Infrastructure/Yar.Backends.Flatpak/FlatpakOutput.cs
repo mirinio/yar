@@ -73,6 +73,39 @@ public static class FlatpakOutput
         return new(Of("shared"), Of("sockets"), Of("devices"), Of("filesystems"), sessionBus, systemBus);
     }
 
+    /// <summary>
+    /// Parses what <c>flatpak remote-info</c> prints about one app: aligned <c>Key: value</c> lines.
+    /// Keys are kept as printed ("Download Size", "Runtime").
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> ParseRemoteInfo(string output)
+    {
+        var facts = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            var separator = line.IndexOf(": ", StringComparison.Ordinal);
+            // The first line is "Name - summary", which has no key; a summary with a colon in it is no key either.
+            if (separator <= 0 || line[..separator].Contains(" - ", StringComparison.Ordinal))
+                continue;
+            facts.TryAdd(line[..separator], line[(separator + 2)..].Trim());
+        }
+        return facts;
+    }
+
+    /// <summary>
+    /// Reads which part an install or removal has reached from a line flatpak printed. Without a
+    /// terminal it prints one line per part ("Installing runtime/org.gnome.Platform/x86_64/50") and
+    /// no percentages. Returns the part's ID, or null for any other line.
+    /// </summary>
+    public static string? ParseStep(string line)
+    {
+        var words = line.Trim().Split(' ');
+        if (words is not [("Installing" or "Uninstalling" or "Updating"), var reference])
+            return null;
+        var parts = reference.Split('/');
+        return parts is [("app" or "runtime"), { Length: > 0 } id, _, _] ? id : null;
+    }
+
     public static readonly string[] RuntimeColumns = ["application", "name", "branch", "size", "installation"];
 
     /// <summary>Parses <c>flatpak list --runtime</c>: the shared parts Flatpak apps are built on.</summary>

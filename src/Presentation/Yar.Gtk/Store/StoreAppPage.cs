@@ -115,6 +115,8 @@ internal static class StoreAppPage
         Ui ui, StoreApp app, Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)> offerRows)
     {
         var suggested = StoreCatalog.Suggest(app, ui.Presentation.TrustOf);
+        var installed = StoreCatalog.InstalledMatch(app, ui.Snapshot.Apps);
+        var anyInstallable = false;
         var group = Widgets.Group(
             T._("Where you can get it"),
             app.Offers.Count == 1
@@ -159,6 +161,20 @@ internal static class StoreAppPage
             }
             rowTags.Add(Widgets.TrustTag(trust));
 
+            // No button for an app that is already here from this very source.
+            var canInstall = ui.Host.Ability<IAppInstaller>(offer.ProviderId)?.TargetsFor(offer, ui.Snapshot.Sources).Count > 0 &&
+                !(installed is not null && installed.ProviderId == offer.ProviderId);
+            anyInstallable |= canInstall;
+            if (canInstall)
+            {
+                var install = Gtk.Button.NewWithLabel(T._("Install"));
+                install.Valign = Gtk.Align.Center;
+                if (offer == suggested)
+                    install.AddCssClass("suggested-action");
+                install.OnClicked += (_, _) => ChangeDialog.Install(ui, app, offer);
+                rowTags.Add(install);
+            }
+
             var title = source?.Name ?? offer.SourceId;
             var row = source is null
                 ? Plain(title, string.Join("\n", notes), rowTags)
@@ -168,10 +184,14 @@ internal static class StoreAppPage
             offerRows[offer] = (row, string.Join("\n", notes));
         }
 
+        // Only where I can't install any of the offers myself is the software centre the way to go.
+        if (anyInstallable)
+            return group;
+
         var later = Adw.ActionRow.New();
         later.UseMarkup = false;
-        later.Title = T._("I can't install apps yet");
-        later.Subtitle = T._("For now, your software centre can install it.");
+        later.Title = T._("I can't install this one yet");
+        later.Subtitle = T._("Your software centre can.");
         var open = Gtk.Button.NewWithLabel(T._("Open software centre"));
         open.Valign = Gtk.Align.Center;
         // An appstream: address opens the app's page in Discover or GNOME Software.

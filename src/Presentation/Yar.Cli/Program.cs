@@ -7,7 +7,7 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
@@ -74,6 +74,93 @@ if (command is "history" or "undo")
         return 0;
     }
     return Failed(await host.Make.UndoAsync(step, now)) ? 1 : 0;
+}
+
+// yar-apps install <app id> [--from <source id>] [--system] [--yes]: what the Store's Install button does.
+// yar-apps remove <app id or name> [--data] [--yes]: what the Remove button does.
+// Both print the plan and change nothing without --yes.
+if (command is "install" or "remove")
+{
+    var options = new HashSet<string>(["--from"], StringComparer.Ordinal);
+    var words = new List<string>();
+    string? from = null;
+    for (var i = 0; i < args.Length; i++)
+    {
+        if (args[i] == "--from")
+            from = args.ElementAtOrDefault(++i);
+        else if (!args[i].StartsWith('-'))
+            words.Add(args[i]);
+    }
+    // The first word is the command itself.
+    var wanted = words.Count > 1 ? words[1] : "";
+    var now = await host.Catalog.LoadAppsAsync(CancellationToken.None);
+    Yar.Core.ChangePlan plan;
+
+    if (command == "install")
+    {
+        var catalog = Yar.Core.StoreCatalog.Merge(await host.Store.ReadAsync(CancellationToken.None));
+        var normal = Yar.Core.StoreCatalog.Normalize(wanted);
+        var app = catalog.FirstOrDefault(a => a.KnownIds.Any(id => Yar.Core.StoreCatalog.Normalize(id).Equals(normal, StringComparison.OrdinalIgnoreCase)));
+        var offer = app?.Offers.FirstOrDefault(o => from is null ? host.Ability<Yar.Core.IAppInstaller>(o.ProviderId) is not null : o.SourceId == from);
+        if (app is null || offer is null || host.Ability<Yar.Core.IAppInstaller>(offer.ProviderId) is not { } installer)
+        {
+            Console.Error.WriteLine("No app with that ID is on offer from a source I can install from. See: yar-apps store <words> --json");
+            return 1;
+        }
+        var targets = installer.TargetsFor(offer, now.Sources);
+        var target = args.Contains("--system") ? targets.FirstOrDefault(t => t.Id == "system") : targets.Count > 0 ? targets[0] : null;
+        if (target is null)
+        {
+            Console.Error.WriteLine("That source can't install to the place you asked for.");
+            return 1;
+        }
+        Console.WriteLine($"Install {app.Name} from {offer.SourceId}: {target.Label}");
+        plan = await installer.PlanInstallAsync(offer, target, app.Name, CancellationToken.None);
+    }
+    else
+    {
+        var matches = now.Apps.Where(a => a.Id == wanted || a.ComponentId == wanted ||
+            a.Name.Equals(wanted, StringComparison.OrdinalIgnoreCase)).ToList();
+        if (matches.Count != 1 || host.Ability<Yar.Core.IAppRemover>(matches[0].ProviderId) is not { } remover)
+        {
+            Console.Error.WriteLine(matches.Count > 1
+                ? "More than one installed app matches; use its ID from: yar-apps apps --json"
+                : "No installed app matches that I can remove.");
+            return 1;
+        }
+        Console.WriteLine($"Remove {matches[0].Name} ({matches[0].ProviderId} {matches[0].Id})");
+        plan = await remover.PlanRemovalAsync(matches[0], CancellationToken.None);
+    }
+
+    PrintPlan(plan);
+    if (plan.Blocked is not null)
+        return 1;
+    if (!args.Contains("--yes"))
+    {
+        Console.WriteLine("Nothing was changed. Add --yes to do it.");
+        return 0;
+    }
+    var shown = "";
+    void Show()
+    {
+        if (host.Operations.Current is not { } running)
+            return;
+        var line = $"{running.Progress.Phase} {(running.Progress.Fraction is { } f ? $"{f:P0}" : "")} {running.Progress.Detail}".Trim();
+        lock (options)
+        {
+            if (line != shown)
+                Console.WriteLine("  " + (shown = line));
+        }
+    }
+    host.Operations.Changed += Show;
+    var done = command == "install"
+        ? await host.Make.InstallAsync(plan)
+        : await host.Make.RemoveAsync(plan, removeData: args.Contains("--data"));
+    host.Operations.Changed -= Show;
+    if (Failed(done))
+        return 1;
+    Console.WriteLine($"done ({done.Id}){(done.Trashed.Count > 0 ? $", {done.Trashed.Count} moved to the Trash" : "")}");
+    return 0;
 }
 
 // What a change would do, as the window's preview shows it.

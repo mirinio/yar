@@ -49,6 +49,35 @@ lists flatseal && pass "Yar lists Flatseal" || fail "Yar lists Flatseal"
 yar-apps source-remove user:flathub >/tmp/check.log 2>&1 && fail "Yar refuses to remove a source that still has apps" || pass "Yar refuses to remove a source that still has apps"
 check "flatpak removes Flatseal" flatpak uninstall --user --noninteractive com.github.tchx84.Flatseal
 lists flatseal && fail "Yar no longer lists Flatseal" || pass "Yar no longer lists Flatseal"
+
+step "Yar installs and removes a Flatpak app itself, with undo"
+app=com.github.tchx84.Flatseal
+data="$HOME/.var/app/$app"
+has() { flatpak list --user --app --columns=application | grep -qx "$app"; }
+last() { yar-apps history | awk '$5 == "RemoveApp" { id = $1 } END { print id }'; }
+yar-apps install "$app" >/tmp/check.log 2>&1; grep -q 'Nothing was changed' /tmp/check.log && ! has \
+  && pass "without --yes Yar only shows the plan" || fail "without --yes Yar only shows the plan"
+sed 's/^/        /' /tmp/check.log
+yar-apps install "$app" --yes >/tmp/install.log 2>&1 && pass "Yar installs Flatseal for this user" || { fail "Yar installs Flatseal for this user"; tail -5 /tmp/install.log; }
+echo "        progress lines Yar reported: $(grep -c '^  ' /tmp/install.log)"; grep '^  ' /tmp/install.log | sed -n '1,4p;$p' | sed 's/^/      /'
+has && pass "flatpak agrees it is installed" || fail "flatpak agrees it is installed"
+lists flatseal && pass "Yar lists Flatseal" || fail "Yar lists Flatseal"
+mkdir -p "$data/config" && echo mine > "$data/config/settings"
+check "Yar removes it and keeps its data" yar-apps remove "$app" --yes
+! has && [ -f "$data/config/settings" ] && pass "the app is gone, the data is still there" || fail "the app is gone, the data is still there"
+check "Yar undoes the removal" yar-apps undo "$(last)" --yes
+has && pass "the app is back" || fail "the app is back"
+check "Yar removes it together with its data" yar-apps remove "$app" --data --yes
+! has && [ ! -e "$data" ] && [ -f "$HOME/.local/share/Trash/files/$app/config/settings" ] \
+  && pass "the data is in the Trash, not erased" || fail "the data is in the Trash, not erased"
+check "Yar undoes that too" yar-apps undo "$(last)" --yes
+has && [ "$(cat "$data/config/settings" 2>/dev/null)" = mine ] && pass "app and data are both back" || fail "app and data are both back"
+check "Yar undoes the very first install" yar-apps undo "$(yar-apps history | awk '$5 == "InstallApp" && $6 == "undo" { print $1; exit }')" --yes
+! has && pass "the app is gone again" || fail "the app is gone again"
+yar-apps install org.example.NoSuchApp --yes >/tmp/check.log 2>&1 && fail "an unknown app is refused" || pass "an unknown app is refused"
+yar-apps history | sed 's/^/        /'
+flatpak uninstall --user --noninteractive --unused >/dev/null 2>&1
+
 check "Yar removes the source" yar-apps source-remove user:flathub
 
 step "A package source can be switched through Yar (the switch that needs a password on a real system)"

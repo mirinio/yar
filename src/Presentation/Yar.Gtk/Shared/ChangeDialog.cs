@@ -153,7 +153,7 @@ internal static class ChangeDialog
                 return;
 
             plan = made;
-            (var page, dataSwitch) = Describe(ui, made, targets, target, intro, chosen =>
+            (var page, dataSwitch) = Describe(ui, made, targets, target, intro, removing: destructive, chosen =>
             {
                 target = chosen;
                 Work();
@@ -193,7 +193,7 @@ internal static class ChangeDialog
 
     private static (Adw.PreferencesPage Page, Adw.SwitchRow? DataSwitch) Describe(
         Ui ui, ChangePlan plan, IReadOnlyList<InstallTarget> targets, InstallTarget? target, string? intro,
-        Action<InstallTarget> retarget)
+        bool removing, Action<InstallTarget> retarget)
     {
         var page = Adw.PreferencesPage.New();
         Adw.SwitchRow? dataSwitch = null;
@@ -253,7 +253,7 @@ internal static class ChangeDialog
             if (plan.DownloadBytes is { } download)
                 sizes.Add(T.F("{0} to download", Presentation.FormatSize(download)));
             if (plan.DiskBytes is { } disk)
-                sizes.Add(T.F("{0} on your disk", Presentation.FormatSize(disk)));
+                sizes.Add(T.F(removing ? "frees {0} on your disk" : "{0} on your disk", Presentation.FormatSize(disk)));
             var items = Widgets.Group(
                 T._("What this involves"),
                 sizes.Count == 0 ? null : string.Join(" · ", sizes));

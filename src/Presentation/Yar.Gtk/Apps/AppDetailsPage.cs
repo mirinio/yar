@@ -30,16 +30,31 @@ internal static class AppDetailsPage
         foreach (var category in app.Categories)
             tags.Append(Widgets.Tag(Presentation.CategoryName(category)));
         header.Append(tags);
+        var actions = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
+        actions.Halign = Gtk.Align.Center;
+        actions.MarginTop = 12;
         if (app.PrimaryLauncherPath is { } launcher && !app.Technical.ContainsKey("broken"))
         {
             var open = Gtk.Button.NewWithLabel(T._("Open"));
             open.AddCssClass("suggested-action");
             open.AddCssClass("pill");
-            open.Halign = Gtk.Align.Center;
-            open.MarginTop = 12;
             open.OnClicked += (_, _) => AppLauncher.Start(ui, app, launcher);
-            header.Append(open);
+            actions.Append(open);
         }
+        if (ui.Host.Ability<IAppRemover>(app.ProviderId) is { } remover)
+        {
+            var remove = Gtk.Button.NewWithLabel(T._("Remove…"));
+            remove.AddCssClass("pill");
+            // An app that can't be removed from here keeps the button, greyed out, with the reason on it.
+            if (remover.WhyNotRemovable(app) is { } whyNot)
+            {
+                remove.Sensitive = false;
+                remove.TooltipText = T._(whyNot);
+            }
+            remove.OnClicked += (_, _) => ChangeDialog.Remove(ui, app);
+            actions.Append(remove);
+        }
+        header.Append(actions);
         var headerGroup = Adw.PreferencesGroup.New();
         headerGroup.Add(header);
         page.Add(headerGroup);
