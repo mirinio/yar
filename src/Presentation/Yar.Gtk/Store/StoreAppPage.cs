@@ -34,6 +34,26 @@ internal static class StoreAppPage
         foreach (var category in app.Categories.Where(c => c != AppCategory.Other))
             tags.Append(Widgets.Tag(Presentation.CategoryName(category)));
         header.Append(tags);
+        // The one obvious button, for the source I would suggest. The other choices are further down.
+        var best = StoreCatalog.Suggest(app, ui.Presentation.TrustOf);
+        if (installed is null && best is not null &&
+            ui.Host.Ability<IAppInstaller>(best.ProviderId)?.TargetsFor(best, ui.Snapshot.Sources).Count > 0)
+        {
+            var install = Gtk.Button.NewWithLabel(T._("Install"));
+            install.AddCssClass("suggested-action");
+            install.AddCssClass("pill");
+            install.Halign = Gtk.Align.Center;
+            install.MarginTop = 12;
+            install.SetSizeRequest(160, -1);
+            install.OnClicked += (_, _) => ChangeDialog.Install(ui, app, best);
+            header.Append(install);
+            var from = Gtk.Label.New(app.Offers.Count > 1
+                ? T.F("From {0}. Other sources are listed below.", ui.Presentation.SourceOf(best)?.Name ?? best.SourceId)
+                : T.F("From {0}", ui.Presentation.SourceOf(best)?.Name ?? best.SourceId));
+            from.AddCssClass("dim-label");
+            from.AddCssClass("caption");
+            header.Append(from);
+        }
         var headerGroup = Adw.PreferencesGroup.New();
         headerGroup.Add(header);
         page.Add(headerGroup);
@@ -59,7 +79,7 @@ internal static class StoreAppPage
             page.Add(have);
         }
 
-        var offerRows = new Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)>();
+        var offerRows = new Dictionary<StoreOffer, OfferRow>();
         page.Add(CreateOffers(ui, app, offerRows));
         page.Add(CreateReach(ui, app, offerRows));
 
@@ -112,7 +132,7 @@ internal static class StoreAppPage
     }
 
     private static Adw.PreferencesGroup CreateOffers(
-        Ui ui, StoreApp app, Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)> offerRows)
+        Ui ui, StoreApp app, Dictionary<StoreOffer, OfferRow> offerRows)
     {
         var suggested = StoreCatalog.Suggest(app, ui.Presentation.TrustOf);
         var installed = StoreCatalog.InstalledMatch(app, ui.Snapshot.Apps);
@@ -165,23 +185,54 @@ internal static class StoreAppPage
             var canInstall = ui.Host.Ability<IAppInstaller>(offer.ProviderId)?.TargetsFor(offer, ui.Snapshot.Sources).Count > 0 &&
                 !(installed is not null && installed.ProviderId == offer.ProviderId);
             anyInstallable |= canInstall;
+
+            // Laid out by hand: the source's name, its tags on a line of their own, the notes below,
+            // and the Install button alone on the right, where it cannot be taken for one of the tags.
+            var title = Gtk.Label.New(source?.Name ?? offer.SourceId);
+            title.Xalign = 0;
+            title.AddCssClass("heading");
+            title.Ellipsize = Pango.EllipsizeMode.End;
+            var tagLine = Gtk.Box.New(Gtk.Orientation.Horizontal, 6);
+            foreach (var tag in rowTags)
+                tagLine.Append(tag);
+            var noteLabel = Gtk.Label.New(string.Join("\n", notes));
+            noteLabel.Xalign = 0;
+            noteLabel.Wrap = true;
+            noteLabel.AddCssClass("dim-label");
+            noteLabel.AddCssClass("caption");
+            var text = Gtk.Box.New(Gtk.Orientation.Vertical, 6);
+            text.Hexpand = true;
+            text.Append(title);
+            text.Append(tagLine);
+            text.Append(noteLabel);
+
+            var line = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
+            line.AddCssClass("yar-offer");
+            line.Append(text);
+            if (source is not null)
+            {
+                var about = Gtk.Button.NewWithLabel(T._("About this source"));
+                about.Valign = Gtk.Align.Center;
+                about.AddCssClass("flat");
+                about.OnClicked += (_, _) => ui.ShowSource(source);
+                line.Append(about);
+            }
             if (canInstall)
             {
                 var install = Gtk.Button.NewWithLabel(T._("Install"));
                 install.Valign = Gtk.Align.Center;
+                install.SetSizeRequest(96, -1);
                 if (offer == suggested)
                     install.AddCssClass("suggested-action");
                 install.OnClicked += (_, _) => ChangeDialog.Install(ui, app, offer);
-                rowTags.Add(install);
+                line.Append(install);
             }
 
-            var title = source?.Name ?? offer.SourceId;
-            var row = source is null
-                ? Plain(title, string.Join("\n", notes), rowTags)
-                : Widgets.Navigation(title, string.Join("\n", notes), () => ui.ShowSource(source), [.. rowTags]);
-            row.SubtitleLines = 0;
+            var row = Adw.PreferencesRow.New();
+            row.Activatable = false;
+            row.Child = line;
             group.Add(row);
-            offerRows[offer] = (row, string.Join("\n", notes));
+            offerRows[offer] = new(noteLabel, tagLine, string.Join("\n", notes));
         }
 
         // Only where I can't install any of the offers myself is the software centre the way to go.
@@ -203,7 +254,7 @@ internal static class StoreAppPage
 
     // "What it can reach", and the sizes on the offer rows. Both arrive after the page is shown.
     private static Adw.PreferencesGroup CreateReach(
-        Ui ui, StoreApp app, Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)> offerRows)
+        Ui ui, StoreApp app, Dictionary<StoreOffer, OfferRow> offerRows)
     {
         var flatpak = app.Offers.FirstOrDefault(offer => offer.ProviderId == "flatpak");
         var group = Widgets.PermissionsGroup(null, ui.Technical);
@@ -214,13 +265,13 @@ internal static class StoreAppPage
                 : T._("For the Flatpak version I look this up on flathub.org, which is switched off in the settings."));
         }
 
-        foreach (var (offer, (row, notes)) in offerRows)
-            _ = FillOffer(ui, app, offer, row, notes, offer == flatpak ? group : null);
+        foreach (var (offer, row) in offerRows)
+            _ = FillOffer(ui, app, offer, row, offer == flatpak ? group : null);
         return group;
     }
 
     private static async Task FillOffer(
-        Ui ui, StoreApp app, StoreOffer offer, Adw.ActionRow row, string notes, Adw.PreferencesGroup? reach)
+        Ui ui, StoreApp app, StoreOffer offer, OfferRow row, Adw.PreferencesGroup? reach)
     {
         OfferSize? size = null;
         try
@@ -238,7 +289,7 @@ internal static class StoreAppPage
                         reach.Description = Widgets.Escape(prefix + Widgets.PermissionVerdict(report.Verdict));
                         Widgets.AddPermissionRows(reach, report, ui.Technical);
                         if (report.Verdict == PermissionWeight.Broad)
-                            row.AddSuffix(Widgets.Tag(T._("Broad access"), attention: true));
+                            row.Tags.Append(Widgets.Tag(T._("Broad access"), attention: true));
                     }
                     else
                     {
@@ -264,7 +315,7 @@ internal static class StoreAppPage
         if (size?.InstalledBytes is { } installed)
             parts.Add(T.F("{0} once installed", Presentation.FormatSize(installed)));
         if (parts.Count > 0)
-            row.Subtitle = $"{notes}\n{string.Join(" · ", parts)}";
+            row.Notes.SetText($"{row.Text}\n{string.Join(" · ", parts)}");
     }
 
     private static Adw.PreferencesGroup CreateReviews(Ui ui, StoreApp app)
@@ -335,16 +386,8 @@ internal static class StoreAppPage
         }
     }
 
-    private static Adw.ActionRow Plain(string title, string subtitle, List<Gtk.Widget> suffixes)
-    {
-        var row = Adw.ActionRow.New();
-        row.UseMarkup = false;
-        row.Title = title;
-        row.Subtitle = subtitle;
-        foreach (var suffix in suffixes)
-            row.AddSuffix(suffix);
-        return row;
-    }
+    /// <summary>The parts of an offer's row that are filled in later, when sizes and permissions arrive.</summary>
+    private sealed record OfferRow(Gtk.Label Notes, Gtk.Box Tags, string Text);
 
     private static string LicenseText(string license) =>
         license.Contains("proprietary", StringComparison.OrdinalIgnoreCase)

@@ -41,6 +41,31 @@ internal static class ScreenshotCarousel
         return box;
     }
 
+    // The picture at the size the window allows; a click anywhere on it, or Escape, closes it again.
+    private static void ShowLarge(Ui ui, Gdk.Texture texture)
+    {
+        var dialog = Adw.Dialog.New();
+        dialog.Title = T._("Picture");
+        // As large as the picture itself, but never larger than the window can show.
+        dialog.ContentWidth = Math.Clamp(texture.GetWidth(), 480, Math.Max(480, ui.Window.GetWidth() - 80));
+        dialog.ContentHeight = Math.Clamp(texture.GetHeight() + 48, 360, Math.Max(360, ui.Window.GetHeight() - 80));
+
+        var large = Gtk.Picture.NewForPaintable(texture);
+        large.ContentFit = Gtk.ContentFit.Contain;
+        large.CanShrink = true;
+        large.Vexpand = true;
+        large.SetCursorFromName("zoom-out");
+        var close = Gtk.GestureClick.New();
+        close.OnReleased += (_, _) => dialog.Close();
+        large.AddController(close);
+
+        var toolbar = Adw.ToolbarView.New();
+        toolbar.AddTopBar(Adw.HeaderBar.New());
+        toolbar.Content = large;
+        dialog.Child = toolbar;
+        dialog.Present(ui.Window);
+    }
+
     private static async Task Load(Ui ui, string url, Adw.Carousel carousel, Adw.Bin frame)
     {
         Gdk.Texture? texture = null;
@@ -65,6 +90,11 @@ internal static class ScreenshotCarousel
         picture.CanShrink = true;
         picture.AddCssClass("yar-shot");
         picture.SetSizeRequest(-1, Height);
+        picture.TooltipText = T._("Click to see it large");
+        picture.SetCursorFromName("zoom-in");
+        var click = Gtk.GestureClick.New();
+        click.OnReleased += (_, _) => ShowLarge(ui, texture);
+        picture.AddController(click);
         frame.Child = picture;
     }
 }

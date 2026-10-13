@@ -37,6 +37,15 @@ internal static class Widgets
         }
         """;
 
+    private const string ExtraCss = """
+        .yar-hint {
+            padding: 8px 12px;
+        }
+        .yar-offer {
+            padding: 12px;
+        }
+        """;
+
     private static bool _cssLoaded;
 
     public static void LoadCss()
@@ -44,8 +53,11 @@ internal static class Widgets
         if (_cssLoaded || Gdk.Display.GetDefault() is not { } display)
             return;
         var provider = Gtk.CssProvider.New();
-        provider.LoadFromString(Css);
+        provider.LoadFromString(Css + ExtraCss);
         Gtk.StyleContext.AddProviderForDisplay(display, provider, 600); // GTK_STYLE_PROVIDER_PRIORITY_APPLICATION
+        // Yar's logo ships next to the program, so it is found whether or not Yar is installed.
+        Gtk.IconTheme.GetForDisplay(display).AddSearchPath(Path.Combine(AppContext.BaseDirectory, "icons"));
+        Gtk.Window.SetDefaultIconName(Yar.Core.AppIdentity.Id);
         _cssLoaded = true;
     }
 

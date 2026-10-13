@@ -18,6 +18,7 @@ internal sealed class StorePage
     private readonly Adw.Bin _home = Adw.Bin.New();
     private readonly List<Adw.PreferencesGroup> _groups = [];
 
+    private readonly Gtk.Button _addFromStatus;
     private Ui? _ui;
     private StoreData? _data;
     private AppCategory? _category;
@@ -50,6 +51,28 @@ internal sealed class StorePage
         controls.MarginStart = 24;
         controls.MarginEnd = 24;
 
+        // Not every app is in a source. Say so up front, and lead to the other way in.
+        var elsewhere = Gtk.Label.New(T._("Can't find an app here? You can still install it from a file or a link you downloaded."));
+        elsewhere.Xalign = 0;
+        elsewhere.Wrap = true;
+        elsewhere.Hexpand = true;
+        var addApp = Gtk.Button.NewWithLabel(T._("Add an app…"));
+        addApp.Valign = Gtk.Align.Center;
+        addApp.OnClicked += (_, _) => OpenAddApp();
+        var hint = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
+        hint.AddCssClass("card");
+        hint.AddCssClass("yar-hint");
+        hint.Append(Gtk.Image.NewFromIconName("dialog-information-symbolic"));
+        hint.Append(elsewhere);
+        hint.Append(addApp);
+        controls.Append(hint);
+
+        var addFromStatus = Gtk.Button.NewWithLabel(T._("Add an app from a file or a link…"));
+        addFromStatus.AddCssClass("pill");
+        addFromStatus.Halign = Gtk.Align.Center;
+        addFromStatus.OnClicked += (_, _) => OpenAddApp();
+        _addFromStatus = addFromStatus;
+
         _stack.AddNamed(_status, "status");
         _stack.AddNamed(_home, "home");
         _stack.AddNamed(_results, "results");
@@ -59,6 +82,12 @@ internal sealed class StorePage
     }
 
     public Gtk.Widget Widget => _root;
+
+    private void OpenAddApp()
+    {
+        if (_ui is { } ui)
+            ui.Push(AddAppStart.Create(ui));
+    }
 
     public void Show(Ui ui)
     {
@@ -227,10 +256,11 @@ internal sealed class StorePage
         {
             ShowStatus(
                 T._("Nothing found"),
-                showInstalled
+                (showInstalled
                     ? T._("None of your sources has an app that matches.")
-                    : T._("None of your sources has an app that matches and that you don't have yet."),
-                "edit-find-symbolic");
+                    : T._("None of your sources has an app that matches and that you don't have yet.")) + "\n" +
+                T._("If you know where to download it, you can still install it from the file or the link."),
+                "edit-find-symbolic", offerAdding: true);
             return;
         }
 
@@ -263,8 +293,9 @@ internal sealed class StorePage
         return row;
     }
 
-    private void ShowStatus(string title, string? description, string icon)
+    private void ShowStatus(string title, string? description, string icon, bool offerAdding = false)
     {
+        _status.Child = offerAdding ? _addFromStatus : null;
         _status.Title = title;
         _status.Description = description;
         _status.IconName = icon;

@@ -7,6 +7,10 @@
   <ItemGroup>
     <ProjectReference Include="../../Composition/Yar.Hosting/Yar.Hosting.csproj" />
   </ItemGroup>
+  <!-- Yar's own logo, laid out as an icon theme folder so GTK finds it by the app's ID even when Yar is not installed. -->
+  <ItemGroup>
+    <Content Include="../../../assets/cube_logo.svg" Link="icons/hicolor/scalable/apps/org.example.Yar.svg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="GirCore.Adw-1" />
     <PackageReference Include="GirCore.Gtk-4.0" />
