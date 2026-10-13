@@ -39,7 +39,17 @@ public sealed record SharedPart(string ProviderId, string Id, string Name, long 
 public sealed record StorageOverview(IReadOnlyList<DiskInfo> Disks, IReadOnlyList<StorageItem> Items)
 {
     public long AccountedBytes => Items.Where(item => item.Kind != StorageKind.Other).Sum(item => item.Bytes);
+
+    /// <summary>
+    /// What belongs to apps: the apps with their data, the parts they share and what removed apps
+    /// left behind. Temporary files are not in here; they are nobody's in particular.
+    /// </summary>
+    public IReadOnlyList<StorageItem> AppItems =>
+        Items.Where(item => item.Kind is StorageKind.App or StorageKind.SharedParts or StorageKind.Leftover).ToList();
 }
+
+/// <summary>One folder of temporary files, measured.</summary>
+public sealed record CacheFolder(string Name, string Path, long Bytes, bool Complete);
 
 /// <summary>Reads which disks and partitions this computer has. It only looks.</summary>
 public interface IStorageProbe

@@ -176,16 +176,17 @@ internal sealed class StoragePage
 
     private static void AddApps(Adw.PreferencesPage page, Ui ui, StorageOverview overview)
     {
-        var known = overview.Items.Where(item => item.Kind != StorageKind.Other && item.Bytes > 0).ToList();
+        // Temporary files are not in this picture: they are listed under "Could be tidied".
+        var known = overview.AppItems.Where(item => item.Bytes > 0).ToList();
         var other = overview.Items.FirstOrDefault(item => item.Kind == StorageKind.Other);
 
         var group = Widgets.Group(
             T._("What your apps take"),
             T.F("{0} that I can tie to apps. Each block is one thing; the bigger the block, the more space it takes.",
-                Presentation.FormatSize(overview.AccountedBytes)),
+                Presentation.FormatSize(known.Sum(item => item.Bytes))),
             T._("Blue blocks are Flatpak apps, green ones are system packages, purple ones are parts several Flatpak " +
-                "apps share, orange is temporary files and red is data left behind by apps that are gone. An app's " +
-                "block includes the data it keeps, where I know where that is. Click a block to open that app."));
+                "apps share, and red is data left behind by apps that are gone. An app's block includes the data it " +
+                "keeps, where I know where that is. Click a block to open that app."));
         if (known.Count > 0)
         {
             var map = new TreemapView(height: 340);
@@ -200,7 +201,7 @@ internal sealed class StoragePage
         {
             var row = Adw.ActionRow.New();
             row.UseMarkup = false;
-            row.Title = item.Kind == StorageKind.Cache ? T._("Temporary files") : item.Title;
+            row.Title = item.Title;
             var size = (item.AtLeast ? T._("at least ") : "") + Presentation.FormatSize(item.Bytes);
             row.Subtitle = item.DataBytes > 0
                 ? T.F("{0} · {1} of it is its own data · {2}", size, Presentation.FormatSize(item.DataBytes), TreemapView.Legend(item.Kind, item.ProviderId))
@@ -223,8 +224,8 @@ internal sealed class StoragePage
         {
             var rest = Widgets.Group(
                 T._("Everything else"),
-                help: T._("Your documents, pictures, downloads and games, the system itself, and apps whose size I " +
-                    "cannot measure. I only look at apps; a disk-usage tool shows the rest folder by folder."));
+                help: T._("Your documents, pictures, downloads and games, the system itself, temporary files, and apps " +
+                    "whose size I cannot measure. I only look at apps; a disk-usage tool shows the rest folder by folder."));
             var row = Adw.ActionRow.New();
             row.UseMarkup = false;
             row.Title = Presentation.FormatSize(other.Bytes);
@@ -238,28 +239,48 @@ internal sealed class StoragePage
 
     private static void AddTidy(Adw.PreferencesPage page, Ui ui, StorageOverview overview)
     {
-        var tidy = overview.Items.Where(item => item.Kind is StorageKind.Leftover or StorageKind.Cache).ToList();
-        if (tidy.Count == 0)
+        var leftovers = overview.Items.Where(item => item.Kind == StorageKind.Leftover).ToList();
+        if (leftovers.Count > 0)
+        {
+            var group = Widgets.Group(
+                T._("Left behind by apps that are gone"),
+                T._("I can show these now. Removing them for you comes when I learn to uninstall."),
+                T._("When a Flatpak app is removed, its settings folder stays in case you install it again. Some of " +
+                    "these are nearly empty: they were created once and never used."));
+            foreach (var item in leftovers)
+            {
+                var row = Widgets.PathRow(ui, item.Title, item.Path ?? "");
+                row.AddPrefix(Widgets.Tag((item.AtLeast ? "≥ " : "") + Presentation.FormatSize(item.Bytes)));
+                group.Add(row);
+            }
+            page.Add(group);
+        }
+
+        var caches = overview.Items.Where(item => item.Kind == StorageKind.Cache).ToList();
+        if (caches.Count == 0)
             return;
 
-        var group = Widgets.Group(
-            T._("Could be tidied"),
-            T._("I can show these now. Removing them for you comes when I learn to uninstall."),
-            T._("\"Left behind\" is the settings folder of a Flatpak app that is no longer installed; some are nearly " +
-                "empty and were only ever created, never used. Temporary files are things apps keep to be faster " +
-                "and can make again."));
-        foreach (var item in tidy)
+        var total = caches.Sum(item => item.Bytes);
+        var temporary = Widgets.Group(
+            T._("Temporary files"),
+            T.F("{0}{1} in all, biggest first. Each folder is named by the program that made it.",
+                caches.Any(item => item.AtLeast) ? T._("At least ") : "", Presentation.FormatSize(total)),
+            T._("Programs keep copies of things here so they do not have to fetch or work them out again: " +
+                "web pages a browser has seen, downloads a tool may need twice. Nothing in here is yours; the " +
+                "programs make it again when needed, which is why it is usually safe to clear. I do not clear it yet."));
+        foreach (var item in caches)
         {
-            var title = item.Kind == StorageKind.Cache
-                ? T._("Temporary files of all your apps")
-                : T.F("Left behind by {0}", item.Title);
+            var title = item.Title == StorageAnalyzer.OtherCaches ? T._("All the smaller ones together") : item.Title;
             var row = Widgets.PathRow(ui, title, item.Path ?? "");
             row.AddPrefix(Widgets.Tag((item.AtLeast ? "≥ " : "") + Presentation.FormatSize(item.Bytes)));
-            if (item.Kind == StorageKind.Cache && item.Path is not null && AnalyzerButton(ui, item.Path) is { } button)
-                row.AddSuffix(button);
-            group.Add(row);
+            temporary.Add(row);
         }
-        page.Add(group);
+        if (caches[0].Path is { } first && Path.GetDirectoryName(first) is { } folder &&
+            AnalyzerButton(ui, folder) is { } button)
+        {
+            temporary.HeaderSuffix = button;
+        }
+        page.Add(temporary);
     }
 
     private static AppInfo? AppOf(Ui ui, StorageItem item) =>

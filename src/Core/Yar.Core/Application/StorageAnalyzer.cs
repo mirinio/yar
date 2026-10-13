@@ -7,6 +7,14 @@ namespace Yar.Core;
 public sealed class StorageAnalyzer(
     IStorageProbe probe, IReadOnlyList<ISoftwareProvider> providers, string cacheHome, string home)
 {
+    public const int MaxCacheFolders = 8;
+
+    /// <summary>The title of the entry that adds up the smaller temporary folders.</summary>
+    public const string OtherCaches = "";
+
+    // All temporary folders together get this long; whatever is not reached is left out.
+    private static readonly TimeSpan MaxTimeForCaches = TimeSpan.FromSeconds(8);
+
     // Data folders can be large; give each a fair but bounded look.
     private const int MaxFilesPerFolder = 200_000;
     private static readonly TimeSpan MaxTimePerFolder = TimeSpan.FromSeconds(4);
@@ -20,7 +28,7 @@ public sealed class StorageAnalyzer(
             shared.AddRange(await Tolerant(() => provider.GetSharedPartsAsync(ct), ct).ConfigureAwait(false) ?? []);
 
         var measured = await Task.Run(() => Measure(snapshot, ct), ct).ConfigureAwait(false);
-        return Build(disks, snapshot, measured.Data, shared, measured.Cache, home);
+        return Build(disks, snapshot, measured.Data, shared, measured.Caches, home);
     }
 
     /// <summary>Puts the pieces together. Pure, so the arithmetic can be tested without a disk.</summary>
@@ -29,7 +37,7 @@ public sealed class StorageAnalyzer(
         CatalogSnapshot snapshot,
         IReadOnlyDictionary<(string ProviderId, string AppId), (long Bytes, bool Complete)> dataSizes,
         IReadOnlyList<SharedPart> sharedParts,
-        (long Bytes, bool Complete, string Path)? cache,
+        IReadOnlyList<CacheFolder> caches,
         string home)
     {
         var items = new List<StorageItem>();
@@ -54,8 +62,18 @@ public sealed class StorageAnalyzer(
             StorageKind.Leftover, leftover.Id, leftover.SizeBytes ?? 0, AtLeast: leftover.SizeBytes is null,
             ProviderId: leftover.ProviderId, Path: leftover.Path)));
 
-        if (cache is { Bytes: > 0 } temporary)
-            items.Add(new(StorageKind.Cache, "Temporary files", temporary.Bytes, AtLeast: !temporary.Complete, Path: temporary.Path));
+        // Temporary files are listed folder by folder: "16 GB of temporary files" tells nobody anything,
+        // "8 GB of debugging downloads" does. The many small ones are added up into one entry.
+        var biggest = caches.Where(c => c.Bytes > 0).OrderByDescending(c => c.Bytes).ToList();
+        items.AddRange(biggest.Take(MaxCacheFolders)
+            .Select(c => new StorageItem(StorageKind.Cache, c.Name, c.Bytes, AtLeast: !c.Complete, Path: c.Path)));
+        var smaller = biggest.Skip(MaxCacheFolders).ToList();
+        if (smaller.Count > 0)
+        {
+            items.Add(new(
+                StorageKind.Cache, OtherCaches, smaller.Sum(c => c.Bytes), AtLeast: smaller.Any(c => !c.Complete),
+                Path: Path.GetDirectoryName(smaller[0].Path)));
+        }
 
         // What Yar cannot attribute: used space on the disks holding the system and the home folder,
         // minus everything above. Never negative; the pieces above can overlap or sit on other disks.
@@ -81,7 +99,7 @@ public sealed class StorageAnalyzer(
         return new[] { Holding("/"), Holding(home) }.Where(p => p is not null).Select(p => p!).Distinct().ToList();
     }
 
-    private (Dictionary<(string, string), (long, bool)> Data, (long, bool, string)? Cache) Measure(
+    private (Dictionary<(string, string), (long, bool)> Data, List<CacheFolder> Caches) Measure(
         CatalogSnapshot snapshot, CancellationToken ct)
     {
         var data = new Dictionary<(string, string), (long, bool)>();
@@ -91,14 +109,34 @@ public sealed class StorageAnalyzer(
             if (Directory.Exists(app.DataPath))
                 data[(app.ProviderId, app.Id)] = FolderSize.MeasureUpTo(app.DataPath!, MaxFilesPerFolder, MaxTimePerFolder, ct);
         }
+        return (data, MeasureCaches(cacheHome, MaxTimeForCaches, ct));
+    }
 
-        (long, bool, string)? cache = null;
-        if (Directory.Exists(cacheHome))
+    /// <summary>Measures each folder directly inside the temporary-files folder, within a shared time limit.</summary>
+    public static List<CacheFolder> MeasureCaches(string cacheHome, TimeSpan budget, CancellationToken ct)
+    {
+        var caches = new List<CacheFolder>();
+        var deadline = DateTime.UtcNow + budget;
+        try
         {
-            var (bytes, complete) = FolderSize.MeasureUpTo(cacheHome, MaxFilesPerFolder * 2, MaxTimePerFolder * 2, ct);
-            cache = (bytes, complete, cacheHome);
+            if (!Directory.Exists(cacheHome))
+                return caches;
+
+            foreach (var directory in new DirectoryInfo(cacheHome).EnumerateDirectories().OrderBy(d => d.Name, StringComparer.Ordinal))
+            {
+                ct.ThrowIfCancellationRequested();
+                var remaining = deadline - DateTime.UtcNow;
+                // A link could lead anywhere; only real folders are measured.
+                if (directory.LinkTarget is not null || remaining <= TimeSpan.Zero)
+                    continue;
+                var (bytes, complete) = FolderSize.MeasureUpTo(directory.FullName, MaxFilesPerFolder, remaining, ct);
+                caches.Add(new(directory.Name, directory.FullName, bytes, complete));
+            }
         }
-        return (data, cache);
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+        return caches;
     }
 
     // A part of the picture that cannot be read leaves a gap; it does not take the picture down.

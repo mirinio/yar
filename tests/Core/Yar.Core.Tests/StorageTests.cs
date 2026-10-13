@@ -105,7 +105,8 @@ public class StorageTests
 
         var overview = StorageAnalyzer.Build(
             [Disk], snapshot, data, [new("flatpak", "rt", "Platform 26.08", 50), new("flatpak", "empty", "Empty", 0)],
-            (60, false, "/home/ada/.cache"), "/home/ada");
+            [new("mozilla", "/home/ada/.cache/mozilla", 45, true), new("pip", "/home/ada/.cache/pip", 15, false), new("empty", "/home/ada/.cache/empty", 0, true)],
+            "/home/ada");
 
         var mail = overview.Items.Single(i => i.Title == "mail");
         Assert.Equal((400, 100, false), (mail.Bytes, mail.DataBytes, mail.AtLeast));
@@ -115,7 +116,11 @@ public class StorageTests
         Assert.True(overview.Items.Single(i => i.Title == "only-data").AtLeast);
         Assert.Equal(50, Assert.Single(overview.Items, i => i.Kind == StorageKind.SharedParts).Bytes);
         Assert.Equal(2, overview.Items.Count(i => i.Kind == StorageKind.Leftover));
-        Assert.True(overview.Items.Single(i => i.Kind == StorageKind.Cache).AtLeast);
+        // Temporary files are listed folder by folder, and are not counted among what belongs to apps.
+        Assert.Equal(["mozilla", "pip"], overview.Items.Where(i => i.Kind == StorageKind.Cache).Select(i => i.Title));
+        Assert.True(overview.Items.Single(i => i.Title == "pip").AtLeast);
+        Assert.DoesNotContain(overview.AppItems, i => i.Kind == StorageKind.Cache);
+        Assert.Equal(400 + 40 + 30 + 50 + 20, overview.AppItems.Sum(i => i.Bytes));
 
         Assert.Equal(400 + 40 + 30 + 50 + 20 + 60, overview.AccountedBytes);
         // 500 are in use and 600 are explained (pieces can overlap), so there is no unexplained rest.
@@ -128,10 +133,52 @@ public class StorageTests
     {
         var snapshot = new CatalogSnapshot([], [], [App("flatpak", "mail", 300)], [], [], [], []);
 
-        var overview = StorageAnalyzer.Build([Disk], snapshot, new Dictionary<(string, string), (long, bool)>(), [], null, "/home/ada");
+        var overview = StorageAnalyzer.Build([Disk], snapshot, new Dictionary<(string, string), (long, bool)>(), [], [], "/home/ada");
 
         Assert.Equal(200, overview.Items.Single(i => i.Kind == StorageKind.Other).Bytes);
         Assert.Equal(300, overview.AccountedBytes);
+    }
+
+    [Fact]
+    public void Many_small_temporary_folders_become_one_entry()
+    {
+        var snapshot = new CatalogSnapshot([], [], [], [], [], [], []);
+        var caches = Enumerable.Range(1, 12).Select(n => new CacheFolder($"c{n:00}", $"/home/ada/.cache/c{n:00}", n * 10, n != 3)).ToList();
+
+        var temporary = StorageAnalyzer.Build([], snapshot, new Dictionary<(string, string), (long, bool)>(), [], caches, "/home/ada")
+            .Items.Where(i => i.Kind == StorageKind.Cache).ToList();
+
+        Assert.Equal(StorageAnalyzer.MaxCacheFolders + 1, temporary.Count);
+        Assert.Equal("c12", temporary[0].Title);
+        var rest = temporary.Single(i => i.Title == StorageAnalyzer.OtherCaches);
+        Assert.Equal(10 + 20 + 30 + 40, rest.Bytes);
+        Assert.True(rest.AtLeast);
+        Assert.Equal("/home/ada/.cache", rest.Path);
+    }
+
+    [Fact]
+    public void Temporary_folders_are_measured_one_by_one_without_following_links()
+    {
+        var root = Directory.CreateTempSubdirectory("yar-caches-").FullName;
+        try
+        {
+            var cache = Directory.CreateDirectory(Path.Combine(root, "cache")).FullName;
+            File.WriteAllBytes(Path.Combine(Directory.CreateDirectory(Path.Combine(cache, "browser")).FullName, "blob"), new byte[700]);
+            File.WriteAllBytes(Path.Combine(Directory.CreateDirectory(Path.Combine(cache, "tool")).FullName, "blob"), new byte[30]);
+            File.WriteAllBytes(Path.Combine(cache, "loose-file"), new byte[9]);
+            var outside = Directory.CreateDirectory(Path.Combine(root, "outside")).FullName;
+            File.WriteAllBytes(Path.Combine(outside, "big"), new byte[5000]);
+            Directory.CreateSymbolicLink(Path.Combine(cache, "linked"), outside);
+
+            var measured = StorageAnalyzer.MeasureCaches(cache, TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
+
+            Assert.Equal([("browser", 700L, true), ("tool", 30L, true)], measured.Select(c => (c.Name, c.Bytes, c.Complete)));
+            Assert.Empty(StorageAnalyzer.MeasureCaches(Path.Combine(root, "missing"), TimeSpan.FromSeconds(1), TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
     }
 
     [Fact]
