@@ -66,7 +66,11 @@ internal static class ChangeDialog
             targets: [], (_, _) => Task.FromResult(step.Plan), (_, _) => Run(), intro: T._(step.Summary));
     }
 
-    private static void Report(Ui ui, ChangeRecord done, string success)
+    /// <summary>The last look at a plan worked out elsewhere, before it is carried out.</summary>
+    public static void Confirm(Ui ui, string heading, string yes, ChangePlan plan, Action confirmed) =>
+        Present(ui, heading, yes, destructive: false, targets: [], (_, _) => Task.FromResult(plan), (_, _) => confirmed());
+
+    public static void Report(Ui ui, ChangeRecord done, string success)
     {
         ui.Toast(done.Outcome switch
         {

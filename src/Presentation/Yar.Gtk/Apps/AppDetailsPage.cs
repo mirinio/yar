@@ -81,6 +81,8 @@ internal static class AppDetailsPage
             about.Add(Widgets.Property(T._("App menu"), T._("This app is not in your app menu yet.")));
         page.Add(about);
 
+        if (app.Technical.ContainsKey("added-by-yar"))
+            page.Add(CreateOrigin(ui, app));
         page.Add(CreateLocations(ui, app));
         AddPermissions(ui, app, page);
 
@@ -99,6 +101,62 @@ internal static class AppDetailsPage
         }
 
         return Widgets.Page(app.Name, page);
+    }
+
+    // For an app the user added from a file: where it came from and whether it is still that file.
+    private static Adw.PreferencesGroup CreateOrigin(Ui ui, AppInfo app)
+    {
+        var group = Widgets.Group(
+            T._("You added this app yourself"),
+            T._("No source looks after it. When a new version comes out, you add that one again."));
+        if (app.Technical.TryGetValue("origin", out var origin))
+        {
+            group.Add(Widgets.Property(
+                T._("Came from"),
+                Uri.TryCreate(origin, UriKind.Absolute, out var link) && link.Scheme == Uri.UriSchemeHttps ? link.Host : origin));
+        }
+        if (app.InstalledAt is { } when)
+            group.Add(Widgets.Property(T._("Added"), Presentation.Ago(when)));
+
+        var verified = app.Technical.GetValueOrDefault("hash-verified") == "true";
+        var hash = Adw.ActionRow.New();
+        hash.UseMarkup = false;
+        hash.SubtitleLines = 0;
+        hash.Title = verified
+            ? T._("Matched the publisher's hash when you added it")
+            : T._("Was not compared with a hash from its publisher");
+        hash.AddPrefix(Gtk.Image.NewFromIconName(verified ? "emblem-ok-symbolic" : "dialog-question-symbolic"));
+        // Only a single file can be compared again as a whole.
+        if (app.InstallPath is { } path && File.Exists(path) && app.Technical.ContainsKey("sha256") &&
+            ui.Host.Ability<IIntegrityChecker>(app.ProviderId) is { } checker)
+        {
+            var again = Gtk.Button.NewWithLabel(T._("Check again"));
+            again.Valign = Gtk.Align.Center;
+            again.TooltipText = T._("Reads the file again and tells you whether it is still the one you added");
+            again.OnClicked += async (_, _) =>
+            {
+                again.Sensitive = false;
+                hash.Subtitle = T._("Reading the file…");
+                try
+                {
+                    var result = await checker.CheckAsync(app, CancellationToken.None);
+                    hash.Subtitle = result.Unchanged switch
+                    {
+                        true => T._("Unchanged: it is still exactly the file you added."),
+                        false => T._("Changed: the file is no longer the one you added. If you did not replace it yourself, be careful with it."),
+                        _ => T._("I have nothing to compare it with."),
+                    };
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                {
+                    hash.Subtitle = T._("I couldn't read the file.");
+                }
+                again.Sensitive = true;
+            };
+            hash.AddSuffix(again);
+        }
+        group.Add(hash);
+        return group;
     }
 
     private static Adw.PreferencesGroup CreateLocations(Ui ui, AppInfo app)

@@ -143,3 +143,41 @@ public interface IIntegrityChecker
 {
     Task<IntegrityResult> CheckAsync(AppInfo app, CancellationToken ct);
 }
+
+/// <summary>What a download link leads to, learned before anything is downloaded.</summary>
+/// <param name="Address">Where the file really is, after any forwarding.</param>
+/// <param name="Bytes">Null when the server does not say how big the file is.</param>
+public sealed record LinkInfo(Uri Address, string FileName, long? Bytes);
+
+/// <summary>Fetches a file the user gave a link to, so it can be looked at like a dropped file.</summary>
+public interface IAppDownloader
+{
+    /// <summary>Asks the server what the link leads to. Downloads nothing.</summary>
+    /// <exception cref="InvalidOperationException">The link cannot be used; the message says why.</exception>
+    Task<LinkInfo> ProbeAsync(Uri link, CancellationToken ct);
+
+    /// <summary>Downloads the file into Yar's cache and returns where it is.</summary>
+    Task<string> DownloadAsync(LinkInfo link, IProgress<long> received, CancellationToken ct);
+
+    /// <summary>Deletes a file <see cref="DownloadAsync"/> fetched, when it is no longer needed.</summary>
+    void Discard(string path);
+}
+
+/// <summary>Checks a link a user typed or pasted before anything is done with it.</summary>
+public static class DownloadLink
+{
+    /// <summary>Returns the link to use, or a plain reason why it cannot be used.</summary>
+    public static (Uri? Link, string? Problem) Check(string? text)
+    {
+        var trimmed = text?.Trim() ?? "";
+        if (trimmed.Length == 0)
+            return (null, null);
+        if (trimmed.Length > 4096 || trimmed.Any(char.IsWhiteSpace) || !Uri.TryCreate(trimmed, UriKind.Absolute, out var link))
+            return (null, "That doesn't look like a link.");
+        if (link.Scheme != Uri.UriSchemeHttps)
+            return (null, "I only download over a protected connection, so the link has to start with https://.");
+        if (link.UserInfo.Length > 0 || link.Host.Length == 0)
+            return (null, "That link carries a user name or has no server in it; I won't use it.");
+        return (link, null);
+    }
+}

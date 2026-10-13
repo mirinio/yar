@@ -20,6 +20,9 @@ internal sealed class Settings
     /// <summary>The programming languages to show projects for. Null until the user has seen the list once.</summary>
     public List<string>? DeveloperLanguages { get; set; }
 
+    /// <summary>The folder apps the user adds from a file go into. Null means the recommended one.</summary>
+    public string? AppsFolder { get; set; }
+
     public static Settings Load(string configHome)
     {
         var settings = new Settings(Path.Combine(configHome, "yar", "settings.json"));
@@ -40,6 +43,11 @@ internal sealed class Settings
                     settings.ShowDeveloperProjects =
                         document.RootElement.TryGetProperty("showDeveloperProjects", out var developer) &&
                         developer.ValueKind == JsonValueKind.True;
+                    if (document.RootElement.TryGetProperty("appsFolder", out var folder) &&
+                        folder.ValueKind == JsonValueKind.String && Path.IsPathFullyQualified(folder.GetString()!))
+                    {
+                        settings.AppsFolder = folder.GetString();
+                    }
                     if (document.RootElement.TryGetProperty("developerLanguages", out var languages) &&
                         languages.ValueKind == JsonValueKind.Array)
                     {
@@ -71,6 +79,7 @@ internal sealed class Settings
                 useOnlineData = UseOnlineData,
                 showDeveloperProjects = ShowDeveloperProjects,
                 developerLanguages = DeveloperLanguages,
+                appsFolder = AppsFolder,
             }));
             File.Move(temporary, _path, overwrite: true);
         }

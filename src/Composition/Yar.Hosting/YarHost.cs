@@ -19,6 +19,7 @@ public sealed class YarHost : IDisposable
     private readonly PackageKitClient _packageKit = new();
     private readonly OnlineStoreData _online;
     private readonly GitHubFeed _developer;
+    private readonly LinkDownloader _downloader;
     private readonly ISoftwareProvider[] _providers;
 
     public YarHost()
@@ -70,6 +71,7 @@ public sealed class YarHost : IDisposable
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
         Make = new AppChanges(providers, Operations, Trash, ThirdParty);
         DefaultAppsFolder = Path.Combine(Dirs.Home, "Applications");
+        _downloader = new LinkDownloader(Path.Combine(Dirs.CacheHome, "yar", "downloads"));
         Intake = new BundleIntake(
             new IntakePlaces(
                 Dirs.Home, Path.Combine(Dirs.CacheHome, "yar"), Dirs.UserApplicationsDir,
@@ -132,6 +134,9 @@ public sealed class YarHost : IDisposable
     /// <summary>Takes apps the user brings as a file or a link.</summary>
     public IAppIntake Intake { get; }
 
+    /// <summary>Fetches a file from a link the user gave. Only ever on the user's say-so.</summary>
+    public IAppDownloader Downloader => _downloader;
+
     /// <summary>Where added apps go unless the user chose another folder: <c>~/Applications</c>.</summary>
     public string DefaultAppsFolder { get; }
 
@@ -150,6 +155,7 @@ public sealed class YarHost : IDisposable
         Operations.Dispose();
         _online.Dispose();
         _developer.Dispose();
+        _downloader.Dispose();
         _snap.Dispose();
         _packageKit.Dispose();
     }

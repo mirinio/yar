@@ -60,6 +60,17 @@ internal sealed class AppsPage
         }
         _filters.Append(originButtons);
 
+        var add = Gtk.Button.NewWithLabel(T._("Add an app…"));
+        add.TooltipText = T._("Add an app you downloaded as a file, or from a download link");
+        add.Halign = Gtk.Align.End;
+        add.Hexpand = true;
+        add.OnClicked += (_, _) =>
+        {
+            if (_ui is { } ui)
+                ui.Push(AddAppStart.Create(ui));
+        };
+        _filters.Append(add);
+
         var controls = Gtk.Box.New(Gtk.Orientation.Vertical, 8);
         controls.Append(_search);
         controls.Append(_filters);

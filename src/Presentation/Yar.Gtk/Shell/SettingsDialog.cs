@@ -34,6 +34,56 @@ internal static class SettingsDialog
         general.Add(online);
         page.Add(general);
 
+        var appsFolder = settings.AppsFolder;
+        var added = Widgets.Group(
+            T._("Apps you add yourself"),
+            T._("Where apps go that you add from a file or a download link. You can still pick another folder for a single app when you add it."),
+            T._("Applications in your home folder is the usual place: easy to find, only yours, no password needed. " +
+                "A hidden folder such as .local/opt keeps your home tidy but is harder to find again. A folder on a " +
+                "removable disk works, but its apps are gone whenever the disk is unplugged. Folders for everyone " +
+                "on the computer, such as /opt, need administrator rights, which I never use. Apps from the Store " +
+                "are not affected: Flatpak and your distribution decide where those go."),
+            helpWidthChars: 54);
+        var folderRow = Adw.ActionRow.New();
+        folderRow.UseMarkup = false;
+        var reset = Gtk.Button.NewWithLabel(T._("Use the recommended one"));
+        reset.Valign = Gtk.Align.Center;
+        void ShowFolder()
+        {
+            folderRow.Title = appsFolder ?? host.DefaultAppsFolder;
+            folderRow.Subtitle = appsFolder is null ? T._("The recommended place") : T._("Your own choice");
+            reset.Visible = appsFolder is not null;
+        }
+        var changeFolder = Gtk.Button.NewWithLabel(T._("Change…"));
+        changeFolder.Valign = Gtk.Align.Center;
+        changeFolder.OnClicked += async (_, _) =>
+        {
+            try
+            {
+                var chooser = Gtk.FileDialog.New();
+                chooser.Title = T._("Choose where added apps go");
+                if (await chooser.SelectFolderAsync(window) is { } chosen && chosen.GetPath() is { } path)
+                {
+                    appsFolder = path == host.DefaultAppsFolder ? null : path;
+                    ShowFolder();
+                }
+            }
+            catch (GLib.GException)
+            {
+                // Closed without choosing.
+            }
+        };
+        reset.OnClicked += (_, _) =>
+        {
+            appsFolder = null;
+            ShowFolder();
+        };
+        folderRow.AddSuffix(reset);
+        folderRow.AddSuffix(changeFolder);
+        ShowFolder();
+        added.Add(folderRow);
+        page.Add(added);
+
         var (developerGroup, developer, languages) = CreateDeveloperGroup(host, settings);
         page.Add(developerGroup);
 
@@ -49,7 +99,7 @@ internal static class SettingsDialog
         {
             var chosen = languages();
             var same = technical.Active == settings.ShowTechnicalDetails && online.Active == settings.UseOnlineData &&
-                developer.Active == settings.ShowDeveloperProjects &&
+                developer.Active == settings.ShowDeveloperProjects && appsFolder == settings.AppsFolder &&
                 (settings.DeveloperLanguages ?? []).SequenceEqual(chosen);
             if (same)
                 return;
@@ -57,6 +107,7 @@ internal static class SettingsDialog
             settings.ShowTechnicalDetails = technical.Active;
             settings.UseOnlineData = online.Active;
             settings.ShowDeveloperProjects = developer.Active;
+            settings.AppsFolder = appsFolder;
             // Remember the ticks only once the section has been used, so the first switch-on can suggest some.
             if (developer.Active || settings.DeveloperLanguages is not null)
                 settings.DeveloperLanguages = [.. chosen];

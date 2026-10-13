@@ -81,6 +81,18 @@ internal sealed class MainWindow
         narrow.AddSetter(_split, "collapsed", new GObject.Value(true));
         _window.AddBreakpoint(narrow);
 
+        // A file dropped anywhere on the window is an app the user wants added.
+        var drop = Gtk.DropTarget.New(Gio.FileHelper.GetGType(), Gdk.DragAction.Copy);
+        drop.OnDrop += (_, args) =>
+        {
+            if (_ui is not { } ui || args.Value.GetObject() is not Gio.File file || file.GetPath() is not { } path)
+                return false;
+            ShowApps();
+            AddAppPage.Open(ui, path);
+            return true;
+        };
+        _window.AddController(drop);
+
         // Closing in the middle of a change would leave it half done.
         _window.OnCloseRequest += (_, _) =>
         {
@@ -108,6 +120,13 @@ internal sealed class MainWindow
     }
 
     public void Present() => _window.Present();
+
+    // Adding an app happens under My Apps, whichever tab the file was dropped on.
+    private void ShowApps()
+    {
+        if (_mode.VisibleChildName == "main")
+            _sidebar.SelectRow(_sidebar.GetRowAtIndex(0));
+    }
 
     // Each section has its own page history, so going "back" never jumps between sections.
     private static Section CreateSection(string name, string title, string icon, Gtk.Widget content)

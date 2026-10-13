@@ -29,6 +29,9 @@ internal sealed class Ui(
 
     public Settings Settings => settings;
 
+    /// <summary>Where apps added from a file go unless the user picks another folder for one of them.</summary>
+    public string AppsFolder => settings.AppsFolder ?? host.DefaultAppsFolder;
+
     public void Toast(string text) => toast(text);
 
     /// <summary>Looks at the system again, after something was changed from inside Yar.</summary>
