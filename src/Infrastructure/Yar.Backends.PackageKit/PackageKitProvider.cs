@@ -6,7 +6,8 @@ namespace Yar.Backends.PackageKit;
 /// The distribution's own packages and repositories, through PackageKit. That one interface
 /// covers dnf, apt, zypper and pacman.
 /// </summary>
-public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider
+public sealed partial class PackageKitProvider
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider, IAppInstaller, IAppRemover
 {
     public const string ProviderId = "packagekit";
 

@@ -14,6 +14,21 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     private const ulong FilterNone = 1UL << 1;
     private const ulong FilterInstalled = 1UL << 2;
 
+    // PK_FILTER_ENUM_NOT_INSTALLED = 3, NEWEST = 16, ARCH = 18.
+    private const ulong FilterNotInstalled = 1UL << 3;
+    private const ulong FilterNewest = 1UL << 16;
+    private const ulong FilterArch = 1UL << 18;
+
+    // PK_TRANSACTION_FLAG_ENUM_ONLY_TRUSTED = 1, SIMULATE = 2.
+    private const ulong FlagOnlyTrusted = 1UL << 1;
+    private const ulong FlagSimulate = 1UL << 2;
+
+    // The daemon's way of saying "I cannot tell how far along this is".
+    private const uint PercentageUnknown = 101;
+
+    // A large install over a slow connection takes a while; this only ends one that hangs for good.
+    private static readonly TimeSpan ChangeTimeout = TimeSpan.FromHours(3);
+
     // PK_ROLE_ENUM_REFRESH_CACHE in pk-enum.h.
     private const uint RoleRefreshCache = 13;
 
@@ -102,6 +117,79 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
         names.Count == 0
             ? Task.FromResult<IReadOnlyList<PkPackage>>([])
             : CollectPackagesAsync(transaction => transaction.ResolveAsync(FilterInstalled, [.. names]), ct);
+
+    public Task<IReadOnlyList<PkPackage>> ResolveAvailableAsync(string name, CancellationToken ct) =>
+        CollectPackagesAsync(
+            transaction => transaction.ResolveAsync(FilterNotInstalled | FilterNewest | FilterArch, [name]), ct);
+
+    public Task<IReadOnlyList<PkPackage>> SimulateInstallAsync(IReadOnlyList<string> packageIds, CancellationToken ct) =>
+        CollectPackagesAsync(
+            transaction => transaction.InstallPackagesAsync(FlagOnlyTrusted | FlagSimulate, [.. packageIds]), ct);
+
+    public Task<IReadOnlyList<PkPackage>> SimulateRemoveAsync(IReadOnlyList<string> packageIds, CancellationToken ct) =>
+        CollectPackagesAsync(
+            transaction => transaction.RemovePackagesAsync(FlagSimulate, [.. packageIds], allowDeps: true, autoremove: false), ct);
+
+    public Task InstallAsync(IReadOnlyList<string> packageIds, IProgress<PkProgress> progress, CancellationToken ct) =>
+        ChangeAsync(transaction => transaction.InstallPackagesAsync(FlagOnlyTrusted, [.. packageIds]), progress, ct);
+
+    // autoremove stays off: taking away what "nothing needs any more" is a decision of its own.
+    public Task RemoveAsync(
+        IReadOnlyList<string> packageIds, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct) =>
+        ChangeAsync(
+            transaction => transaction.RemovePackagesAsync(0, [.. packageIds], allowDependents, autoremove: false), progress, ct);
+
+    // A transaction that changes what is installed: the password prompt is allowed, and progress is passed on.
+    private Task ChangeAsync(Func<Transaction, Task> start, IProgress<PkProgress> progress, CancellationToken ct) =>
+        RunAsync(
+            async transaction =>
+            {
+                uint status = 0;
+                uint? percentage = null;
+                var allowCancel = true;
+                return [await transaction.WatchPropertiesChangedAsync(
+                    changed =>
+                    {
+                        if (changed.Status is { } newStatus)
+                            status = newStatus;
+                        if (changed.Percentage is { } newPercentage)
+                            percentage = newPercentage >= PercentageUnknown ? null : newPercentage;
+                        if (changed.AllowCancel is { } newAllowCancel)
+                            allowCancel = newAllowCancel;
+                        progress.Report(new(status, percentage, allowCancel));
+                    },
+                    emitOnCapturedContext: false).ConfigureAwait(false)];
+            },
+            async transaction =>
+            {
+                await transaction.SetHintsAsync(["interactive=true"]).ConfigureAwait(false);
+                await start(transaction).ConfigureAwait(false);
+            },
+            ct, ChangeTimeout);
+
+    public async Task<IReadOnlyDictionary<string, OfferSize>> GetOfferSizesAsync(
+        IReadOnlyList<string> packageIds, CancellationToken ct)
+    {
+        var sizes = new Dictionary<string, OfferSize>(StringComparer.Ordinal);
+        if (packageIds.Count == 0)
+            return sizes;
+
+        await RunAsync(
+            async transaction => [await transaction.WatchDetailsAsync(
+                details =>
+                {
+                    long? Bytes(string key) =>
+                        details.TryGetValue(key, out var value) && value.Type == VariantValueType.UInt64 && value.GetUInt64() > 0
+                            ? (long)Math.Min(value.GetUInt64(), long.MaxValue)
+                            : null;
+                    if (details.TryGetValue("package-id", out var id) && id.Type == VariantValueType.String)
+                        lock (sizes) sizes[id.GetString()] = new(Bytes("download-size"), Bytes("size"));
+                },
+                emitOnCapturedContext: false).ConfigureAwait(false)],
+            transaction => transaction.GetDetailsAsync([.. packageIds]),
+            ct).ConfigureAwait(false);
+        return sizes;
+    }
 
     public Task<IReadOnlyList<PkPackage>> SearchInstalledFileAsync(string path, CancellationToken ct) =>
         CollectPackagesAsync(transaction => transaction.SearchFilesAsync(FilterInstalled, [path]), ct);

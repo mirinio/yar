@@ -76,18 +76,20 @@ if (command is "history" or "undo")
     return Failed(await host.Make.UndoAsync(step, now)) ? 1 : 0;
 }
 
-// yar-apps install <app id> [--from <source id>] [--system] [--yes]: what the Store's Install button does.
+// yar-apps install <app id> [--kind flatpak|packagekit] [--from <source id>] [--system] [--yes]: what the Store's Install button does.
 // yar-apps remove <app id or name> [--data] [--yes]: what the Remove button does.
 // Both print the plan and change nothing without --yes.
 if (command is "install" or "remove")
 {
-    var options = new HashSet<string>(["--from"], StringComparer.Ordinal);
+    var options = new HashSet<string>(["--from", "--kind"], StringComparer.Ordinal);
     var words = new List<string>();
-    string? from = null;
+    string? from = null, kind = null;
     for (var i = 0; i < args.Length; i++)
     {
         if (args[i] == "--from")
             from = args.ElementAtOrDefault(++i);
+        else if (args[i] == "--kind")
+            kind = args.ElementAtOrDefault(++i);
         else if (!args[i].StartsWith('-'))
             words.Add(args[i]);
     }
@@ -101,7 +103,12 @@ if (command is "install" or "remove")
         var catalog = Yar.Core.StoreCatalog.Merge(await host.Store.ReadAsync(CancellationToken.None));
         var normal = Yar.Core.StoreCatalog.Normalize(wanted);
         var app = catalog.FirstOrDefault(a => a.KnownIds.Any(id => Yar.Core.StoreCatalog.Normalize(id).Equals(normal, StringComparison.OrdinalIgnoreCase)));
-        var offer = app?.Offers.FirstOrDefault(o => from is null ? host.Ability<Yar.Core.IAppInstaller>(o.ProviderId) is not null : o.SourceId == from);
+        // As the Store suggests: a Flatpak from the app's own maker first, then the distribution's package.
+        var offer = app?.Offers
+            .Where(o => host.Ability<Yar.Core.IAppInstaller>(o.ProviderId) is not null)
+            .Where(o => (from is null || o.SourceId == from) && (kind is null || o.ProviderId == kind))
+            .OrderBy(o => o is { ProviderId: "flatpak", MakerVerified: true } ? 0 : o.ProviderId == "packagekit" ? 1 : 2)
+            .FirstOrDefault();
         if (app is null || offer is null || host.Ability<Yar.Core.IAppInstaller>(offer.ProviderId) is not { } installer)
         {
             Console.Error.WriteLine("No app with that ID is on offer from a source I can install from. See: yar-apps store <words> --json");
@@ -159,7 +166,7 @@ if (command is "install" or "remove")
     host.Operations.Changed -= Show;
     if (Failed(done))
         return 1;
-    Console.WriteLine($"done ({done.Id}){(done.Trashed.Count > 0 ? $", {done.Trashed.Count} moved to the Trash" : "")}");
+    Console.WriteLine($"done ({done.Id}) {done.Target}{(done.Trashed.Count > 0 ? $", {done.Trashed.Count} moved to the Trash" : "")}");
     return 0;
 }
 

@@ -2,7 +2,7 @@ using Yar.Core;
 
 namespace Yar.Backends.PackageKit.Tests;
 
-public class PackageKitTests
+public partial class PackageKitTests
 {
     private sealed class FakeClient : IPackageKitClient
     {
@@ -65,6 +65,37 @@ public class PackageKitTests
             lock (Searched) Searched.Add(path);
             return Task.FromResult<IReadOnlyList<PkPackage>>(
                 Owners.TryGetValue(path, out var id) ? [PkPackage.Parse(id, "Package summary")!] : []);
+        }
+
+        public List<PkPackage> Available { get; } = [];
+        public List<PkPackage> Simulated { get; } = [];
+        public List<string> Changes { get; } = [];
+
+        public Task<IReadOnlyList<PkPackage>> ResolveAvailableAsync(string name, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<PkPackage>>(Available.Where(p => p.Name == name).ToList());
+
+        public Task<IReadOnlyDictionary<string, OfferSize>> GetOfferSizesAsync(IReadOnlyList<string> ids, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyDictionary<string, OfferSize>>(
+                ids.Where(id => OfferSizes.ContainsKey(id)).ToDictionary(id => id, id => OfferSizes[id]));
+
+        public Task<IReadOnlyList<PkPackage>> SimulateInstallAsync(IReadOnlyList<string> ids, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<PkPackage>>(Simulated);
+
+        public Task<IReadOnlyList<PkPackage>> SimulateRemoveAsync(IReadOnlyList<string> ids, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<PkPackage>>(Simulated);
+
+        public Task InstallAsync(IReadOnlyList<string> ids, IProgress<PkProgress> progress, CancellationToken ct)
+        {
+            progress.Report(new(PkProgress.Download, 40, AllowCancel: true));
+            progress.Report(new(PkProgress.Install, null, AllowCancel: false));
+            Changes.Add("install " + string.Join(",", ids));
+            return Task.CompletedTask;
+        }
+
+        public Task RemoveAsync(IReadOnlyList<string> ids, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct)
+        {
+            Changes.Add($"remove {string.Join(",", ids)} dependents={allowDependents}");
+            return Task.CompletedTask;
         }
 
         public Task<IReadOnlyDictionary<string, long>> GetSizesAsync(IReadOnlyList<string> ids, CancellationToken ct)

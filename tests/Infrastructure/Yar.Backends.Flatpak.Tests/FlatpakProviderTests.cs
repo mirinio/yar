@@ -16,7 +16,7 @@ public class FlatpakProviderTests
             string absolutePath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
         {
             // The one command the provider runs first, to let flatpak create the user's folders.
-            if (arguments is ["remotes", "--user"])
+            if (arguments is ["remotes"])
             {
                 SetUpCalls++;
                 return Task.FromResult(new ProcessResult(0, "", ""));

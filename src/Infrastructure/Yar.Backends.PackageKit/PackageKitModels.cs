@@ -41,7 +41,29 @@ public sealed class PackageKitException(uint code, string details)
     public uint Code { get; } = code;
 }
 
-/// <summary>The PackageKit operations Yar needs. All of them only read.</summary>
+/// <summary>How far a running install or removal has come, in PackageKit's own terms.</summary>
+/// <param name="Status">A PK_STATUS_ENUM value from pk-enum.h.</param>
+/// <param name="Percentage">0 to 100, or null while the daemon cannot say.</param>
+public sealed record PkProgress(uint Status, uint? Percentage, bool AllowCancel)
+{
+    // PK_STATUS_ENUM values from pk-enum.h.
+    public const uint Remove = 6, Download = 8, Install = 9, Update = 10, Cleanup = 11, DepResolve = 13,
+        SigCheck = 14, TestCommit = 15, Commit = 16, Finished = 18, DownloadRepository = 20,
+        DownloadPackagelist = 21, DownloadFilelist = 22, DownloadChangelog = 23, DownloadGroup = 24,
+        DownloadUpdateinfo = 25, LoadingCache = 27;
+
+    public OperationPhase Phase(OperationPhase working) => Status switch
+    {
+        Download or DownloadRepository or DownloadPackagelist or DownloadFilelist or DownloadChangelog
+            or DownloadGroup or DownloadUpdateinfo => OperationPhase.Downloading,
+        DepResolve or SigCheck or TestCommit or LoadingCache => OperationPhase.Checking,
+        Install or Update or Commit or Remove => working,
+        Cleanup or Finished => OperationPhase.Finishing,
+        _ => OperationPhase.Waiting,
+    };
+}
+
+/// <summary>The PackageKit operations Yar needs.</summary>
 public interface IPackageKitClient
 {
     /// <summary>Returns null when PackageKit is not available on this system.</summary>
@@ -78,4 +100,26 @@ public interface IPackageKitClient
 
     /// <summary>Installed size in bytes per package ID. Packages the backend skips are absent.</summary>
     Task<IReadOnlyDictionary<string, long>> GetSizesAsync(IReadOnlyList<string> packageIds, CancellationToken ct);
+
+    /// <summary>The newest not-yet-installed packages with this name, for this computer's processor type.</summary>
+    Task<IReadOnlyList<PkPackage>> ResolveAvailableAsync(string name, CancellationToken ct);
+
+    /// <summary>Download and installed size per package ID. Packages the backend skips are absent.</summary>
+    Task<IReadOnlyDictionary<string, OfferSize>> GetOfferSizesAsync(IReadOnlyList<string> packageIds, CancellationToken ct);
+
+    /// <summary>
+    /// Everything installing these packages would install, update or remove, without doing it.
+    /// <see cref="PkPackage.Info"/> says which.
+    /// </summary>
+    Task<IReadOnlyList<PkPackage>> SimulateInstallAsync(IReadOnlyList<string> packageIds, CancellationToken ct);
+
+    /// <summary>Installs packages from the system's sources. Only signed packages; the system asks for the password.</summary>
+    Task InstallAsync(IReadOnlyList<string> packageIds, IProgress<PkProgress> progress, CancellationToken ct);
+
+    /// <summary>Everything removing these packages would take away, without doing it.</summary>
+    Task<IReadOnlyList<PkPackage>> SimulateRemoveAsync(IReadOnlyList<string> packageIds, CancellationToken ct);
+
+    /// <param name="allowDependents">Also remove the packages that cannot stay without these.</param>
+    Task RemoveAsync(
+        IReadOnlyList<string> packageIds, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct);
 }

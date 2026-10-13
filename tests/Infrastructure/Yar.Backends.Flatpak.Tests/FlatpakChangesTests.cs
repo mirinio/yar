@@ -26,7 +26,7 @@ public class FlatpakChangesTests
         public Task<ProcessResult> RunAsync(
             string absolutePath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
         {
-            if (arguments is ["remotes", "--user"])
+            if (arguments is ["remotes"])
                 return Task.FromResult(new ProcessResult(0, "", ""));
             lock (Calls)
                 Calls.Add(arguments);

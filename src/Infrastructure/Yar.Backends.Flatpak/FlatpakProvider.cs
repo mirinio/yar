@@ -327,7 +327,7 @@ public sealed partial class FlatpakProvider
         return result.StdOut;
     }
 
-    // The very first flatpak command on a machine creates the user's installation folder. Yar asks
+    // The very first flatpak command on a machine creates the installation folders. Yar asks
     // several things at once, and a second command arriving in the middle of that finds it half made
     // and fails. So one harmless command is run to completion before any other is let through.
     private Task EnsureSetUpAsync()
@@ -335,7 +335,7 @@ public sealed partial class FlatpakProvider
         lock (_setUpGate)
         {
             return _setUp ??= _runner.RunAsync(
-                _flatpak!, ["remotes", "--user"], Timeout, CancellationToken.None);
+                _flatpak!, ["remotes"], Timeout, CancellationToken.None);
         }
     }
 

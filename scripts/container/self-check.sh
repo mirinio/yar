@@ -55,10 +55,10 @@ app=com.github.tchx84.Flatseal
 data="$HOME/.var/app/$app"
 has() { flatpak list --user --app --columns=application | grep -qx "$app"; }
 last() { yar-apps history | awk '$5 == "RemoveApp" { id = $1 } END { print id }'; }
-yar-apps install "$app" >/tmp/check.log 2>&1; grep -q 'Nothing was changed' /tmp/check.log && ! has \
+yar-apps install "$app" --kind flatpak >/tmp/check.log 2>&1; grep -q 'Nothing was changed' /tmp/check.log && ! has \
   && pass "without --yes Yar only shows the plan" || fail "without --yes Yar only shows the plan"
 sed 's/^/        /' /tmp/check.log
-yar-apps install "$app" --yes >/tmp/install.log 2>&1 && pass "Yar installs Flatseal for this user" || { fail "Yar installs Flatseal for this user"; tail -5 /tmp/install.log; }
+yar-apps install "$app" --kind flatpak --yes >/tmp/install.log 2>&1 && pass "Yar installs Flatseal for this user" || { fail "Yar installs Flatseal for this user"; tail -5 /tmp/install.log; }
 echo "        progress lines Yar reported: $(grep -c '^  ' /tmp/install.log)"; grep '^  ' /tmp/install.log | sed -n '1,4p;$p' | sed 's/^/      /'
 has && pass "flatpak agrees it is installed" || fail "flatpak agrees it is installed"
 lists flatseal && pass "Yar lists Flatseal" || fail "Yar lists Flatseal"
@@ -79,6 +79,32 @@ yar-apps history | sed 's/^/        /'
 flatpak uninstall --user --noninteractive --unused >/dev/null 2>&1
 
 check "Yar removes the source" yar-apps source-remove user:flathub
+
+step "Yar installs and removes a system package itself, with undo"
+# Any small app the distribution's catalog lists will do; which ones it lists differs between distributions.
+pkg_app=""
+for candidate in galculator.desktop org.xfce.mousepad com.github.tchx84.Flatseal org.gnome.Calculator; do
+  if yar-apps install "$candidate" --kind packagekit 2>/dev/null | grep -q 'Nothing was changed'; then pkg_app="$candidate"; break; fi
+done
+if [ -z "$pkg_app" ]; then
+  fail "the catalog lists an app that comes as a system package"
+else
+  yar-apps install "$pkg_app" --kind packagekit 2>&1 | sed 's/^/        /' | head -24
+  yar-apps install "$pkg_app" --kind packagekit --yes >/tmp/install.log 2>&1 && pass "Yar installs $pkg_app as a system package" || { fail "Yar installs $pkg_app as a system package"; tail -5 /tmp/install.log; }
+  echo "        progress Yar reported:"; grep -E '^  (Waiting|Downloading|Checking|Installing|Finishing)' /tmp/install.log | sed -n '1,8p;$p' | sed 's/^/      /'
+  pkg_target="$(awk '/^done \(/ { print $3 }' /tmp/install.log)"
+  pkg_name="${pkg_target%.*}"
+  if command -v rpm >/dev/null; then have() { rpm -q "$pkg_name" >/dev/null 2>&1; }; else have() { dpkg -s "$pkg_name" 2>/dev/null | grep -q '^Status: install ok installed'; }; fi
+  [ -n "$pkg_name" ] && have && pass "the package manager agrees $pkg_name is installed" || fail "the package manager agrees $pkg_name is installed"
+  yar-apps apps --json 2>/dev/null | grep -q "\"$pkg_target\"" && pass "Yar lists it" || fail "Yar lists it"
+  yar-apps remove "$pkg_target" 2>&1 | sed 's/^/        /' | head -14
+  check "Yar removes it" yar-apps remove "$pkg_target" --yes
+  ! have && pass "the package manager agrees it is gone" || fail "the package manager agrees it is gone"
+  check "Yar undoes the removal" yar-apps undo "$(last)" --yes
+  have && pass "it is back" || fail "it is back"
+  check "Yar removes it again to leave things as they were" yar-apps remove "$pkg_target" --yes
+  ! have && pass "it is gone again" || fail "it is gone again"
+fi
 
 step "A package source can be switched through Yar (the switch that needs a password on a real system)"
 source_id="$(yar-apps sources 2>/dev/null | awk '$1 == "packagekit" && $3 == "off" { print $2; exit }')"
