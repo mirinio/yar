@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Yar.Core/Yar.Core.csproj" />
+    <ProjectReference Include="../Yar.Metadata/Yar.Metadata.csproj" />
+  </ItemGroup>
+</Project>

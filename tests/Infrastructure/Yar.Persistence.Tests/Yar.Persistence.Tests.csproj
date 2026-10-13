@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../../src/Infrastructure/Yar.Persistence/Yar.Persistence.csproj" />
+  </ItemGroup>
+</Project>

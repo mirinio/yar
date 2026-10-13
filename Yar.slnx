@@ -1,0 +1,44 @@
+<Solution>
+  <Folder Name="/Solution Items/">
+    <File Path=".editorconfig" />
+    <File Path="Directory.Build.props" />
+    <File Path="Directory.Packages.props" />
+    <File Path="global.json" />
+    <File Path="README.md" />
+  </Folder>
+  <Folder Name="/src/" />
+  <Folder Name="/src/Core/">
+    <Project Path="src/Core/Yar.Core/Yar.Core.csproj" />
+  </Folder>
+  <Folder Name="/src/Infrastructure/">
+    <Project Path="src/Infrastructure/Yar.Backends.Bundles/Yar.Backends.Bundles.csproj" />
+    <Project Path="src/Infrastructure/Yar.Backends.Flatpak/Yar.Backends.Flatpak.csproj" />
+    <Project Path="src/Infrastructure/Yar.Backends.PackageKit/Yar.Backends.PackageKit.csproj" />
+    <Project Path="src/Infrastructure/Yar.Backends.Snap/Yar.Backends.Snap.csproj" />
+    <Project Path="src/Infrastructure/Yar.Metadata/Yar.Metadata.csproj" />
+    <Project Path="src/Infrastructure/Yar.Online/Yar.Online.csproj" />
+    <Project Path="src/Infrastructure/Yar.Persistence/Yar.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/src/Presentation/">
+    <Project Path="src/Presentation/Yar.Cli/Yar.Cli.csproj" />
+    <Project Path="src/Presentation/Yar.Gtk/Yar.Gtk.csproj" />
+  </Folder>
+  <Folder Name="/src/Composition/">
+    <Project Path="src/Composition/Yar.Hosting/Yar.Hosting.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <File Path="tests/Directory.Build.props" />
+  </Folder>
+  <Folder Name="/tests/Core/">
+    <Project Path="tests/Core/Yar.Core.Tests/Yar.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tests/Infrastructure/">
+    <Project Path="tests/Infrastructure/Yar.Backends.Bundles.Tests/Yar.Backends.Bundles.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Backends.Flatpak.Tests/Yar.Backends.Flatpak.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Backends.PackageKit.Tests/Yar.Backends.PackageKit.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Backends.Snap.Tests/Yar.Backends.Snap.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Metadata.Tests/Yar.Metadata.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Online.Tests/Yar.Online.Tests.csproj" />
+    <Project Path="tests/Infrastructure/Yar.Persistence.Tests/Yar.Persistence.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,19 @@
+[
+  { "name": "Flathub", "providerId": "flatpak", "remoteName": "flathub",
+    "url": "https://dl.flathub.org/repo/flathub.flatpakrepo", "homepage": "https://flathub.org/", "trust": "wellKnown",
+    "description": "The biggest app store for Linux, with thousands of apps. Each app is kept apart from the rest of your system, and many are published by the people who make them." },
+  { "name": "Flathub Beta", "providerId": "flatpak", "remoteName": "flathub-beta",
+    "url": "https://flathub.org/beta-repo/flathub-beta.flatpakrepo", "homepage": "https://flathub.org/", "trust": "wellKnown",
+    "description": "Test versions of apps from Flathub, for trying new features early.",
+    "caution": "These are unfinished versions. Expect bugs, and do not rely on them for important work." },
+  { "name": "GNOME Nightly", "providerId": "flatpak", "remoteName": "gnome-nightly",
+    "url": "https://nightly.gnome.org/gnome-nightly.flatpakrepo", "homepage": "https://nightly.gnome.org/", "trust": "wellKnown",
+    "description": "Daily development builds of GNOME apps, straight from the people who write them.",
+    "caution": "Built fresh every day and not tested. Meant for developers and the curious." },
+  { "name": "elementary AppCenter", "providerId": "flatpak", "remoteName": "appcenter",
+    "url": "https://flatpak.elementary.io/repo.flatpakrepo", "homepage": "https://appcenter.elementary.io/", "trust": "wellKnown",
+    "description": "Apps made for elementary OS and reviewed by its team. They also run on other distributions." },
+  { "name": "RPM Fusion", "providerId": "packagekit", "homepage": "https://rpmfusion.org/Configuration", "trust": "wellKnown",
+    "description": "A well-known community source for Fedora with software Fedora cannot include itself, such as some video formats and drivers.",
+    "caution": "Its packages can change your whole system. I cannot add package sources yet; the website explains how." }
+]

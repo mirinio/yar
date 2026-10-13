@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../../Core/Yar.Core/Yar.Core.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Metadata/Yar.Metadata.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Backends.Bundles/Yar.Backends.Bundles.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Backends.Flatpak/Yar.Backends.Flatpak.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Backends.PackageKit/Yar.Backends.PackageKit.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Backends.Snap/Yar.Backends.Snap.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Persistence/Yar.Persistence.csproj" />
+    <ProjectReference Include="../../Infrastructure/Yar.Online/Yar.Online.csproj" />
+  </ItemGroup>
+</Project>

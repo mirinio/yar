@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>yar-apps</AssemblyName>
+    <RootNamespace>Yar.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Composition/Yar.Hosting/Yar.Hosting.csproj" />
+  </ItemGroup>
+</Project>
