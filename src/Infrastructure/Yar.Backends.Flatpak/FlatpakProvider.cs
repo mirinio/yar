@@ -4,7 +4,7 @@ namespace Yar.Backends.Flatpak;
 
 /// <summary>Flatpak remotes and installed Flatpak apps, read through the <c>flatpak</c> command.</summary>
 public sealed class FlatpakProvider
-    : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider, ISharedPartsProvider
 {
     public const string ProviderId = "flatpak";
 
@@ -85,6 +85,13 @@ public sealed class FlatpakProvider
             }
             return leftovers;
         }, ct);
+
+    /// <summary>The runtimes Flatpak apps are built on. Several apps share one, so they are counted on their own.</summary>
+    public async Task<IReadOnlyList<SharedPart>> GetSharedPartsAsync(CancellationToken ct) =>
+        _flatpak is null
+            ? []
+            : FlatpakOutput.ParseRuntimes(
+                await RunAsync(["list", "--runtime", Columns(FlatpakOutput.RuntimeColumns)], ct).ConfigureAwait(false));
 
     private static bool IsRef(string reference) =>
         reference.Length is > 0 and <= 512 && !reference.StartsWith('-') &&

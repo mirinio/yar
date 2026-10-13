@@ -73,6 +73,21 @@ public static class FlatpakOutput
         return new(Of("shared"), Of("sockets"), Of("devices"), Of("filesystems"), sessionBus, systemBus);
     }
 
+    public static readonly string[] RuntimeColumns = ["application", "name", "branch", "size", "installation"];
+
+    /// <summary>Parses <c>flatpak list --runtime</c>: the shared parts Flatpak apps are built on.</summary>
+    public static IReadOnlyList<SharedPart> ParseRuntimes(string output) =>
+        Rows(output, RuntimeColumns.Length)
+            .Where(row => row[0].Length > 0 && ParseSize(row[3]) is > 0)
+            .Select(row => new SharedPart(
+                "flatpak", $"{row[4]}:{row[0]}/{row[2]}",
+                // Some runtimes already carry their version in the name.
+                Optional(row[1]) is { } name
+                    ? name.Contains(row[2], StringComparison.Ordinal) ? name : $"{name} {row[2]}"
+                    : $"{row[0]} {row[2]}",
+                ParseSize(row[3])!.Value))
+            .ToList();
+
     public static IReadOnlyList<FlatpakRemote> ParseRemotes(string output) =>
         Rows(output, RemoteColumns.Length)
             .Where(row => row[0].Length > 0)

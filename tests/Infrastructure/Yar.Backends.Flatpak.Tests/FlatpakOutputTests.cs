@@ -66,6 +66,21 @@ public class FlatpakOutputTests
     }
 
     [Fact]
+    public void Parses_the_shared_parts_apps_are_built_on()
+    {
+        var parts = FlatpakOutput.ParseRuntimes(
+            "org.freedesktop.Platform\tFreedesktop Platform\t26.08\t721.9\u00a0MB\tsystem\n" +
+            "org.gnome.Platform\tGNOME Application Platform version 50\t50\t1.1\u00a0GB\tsystem\n" +
+            "org.nameless.Thing\t\tstable\t5.0\u00a0MB\tuser\n" +
+            "org.sizeless.Thing\tSizeless\t1\t\tsystem\n");
+
+        Assert.Equal(3, parts.Count);
+        Assert.Equal(new SharedPart("flatpak", "system:org.freedesktop.Platform/26.08", "Freedesktop Platform 26.08", 721_900_000), parts[0]);
+        Assert.Equal("GNOME Application Platform version 50", parts[1].Name);
+        Assert.Equal("org.nameless.Thing stable", parts[2].Name);
+    }
+
+    [Fact]
     public void Parses_updates()
     {
         var updates = FlatpakOutput.ParseUpdates(

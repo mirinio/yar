@@ -18,6 +18,7 @@ internal sealed class MainWindow
     private readonly SourcesPage _sources = new();
     private readonly StorePage _store = new();
     private readonly OpenSourcePage _openSource = new();
+    private readonly StoragePage _storage = new();
     private readonly Adw.NavigationSplitView _split = Adw.NavigationSplitView.New();
     private readonly Gtk.ListBox _sidebar = Gtk.ListBox.New();
     private readonly UpdatesPage _updates = new();
@@ -47,6 +48,7 @@ internal sealed class MainWindow
             CreateSection("store", T._("Store"), "system-software-install-symbolic", _store.Widget),
             CreateSection("sources", T._("Sources"), "folder-download-symbolic", _sources.Widget),
             CreateSection("updates", T._("Updates"), "software-update-available-symbolic", _updates.Widget),
+            CreateSection("storage", T._("Storage"), "drive-harddisk-symbolic", _storage.Widget),
             CreateSection("opensource", T._("Open Source"), "applications-development-symbolic", _openSource.Widget),
         ];
         foreach (var section in _sections)
@@ -114,6 +116,11 @@ internal sealed class MainWindow
             _sections[_section].Navigation.PopToPage(_sections[_section].Root);
             _sectionStack.VisibleChildName = _sections[_section].Name;
             _split.ShowContent = true;
+            // Measuring disks takes a few seconds, so it only happens while that tab is being looked at.
+            if (_sections[_section].Name == "storage")
+                _storage.Activate();
+            else
+                _storage.Deactivate();
         };
         list.SelectRow(list.GetRowAtIndex(0));
 
@@ -278,6 +285,7 @@ internal sealed class MainWindow
         _sources.Show(ui);
         _updates.Show(ui);
         _openSource.Show(ui);
+        _storage.Show(ui);
 
         // The Open Source tab is only in the sidebar while it is switched on in the settings.
         var openSourceIndex = Array.FindIndex(_sections, section => section.Name == "opensource");

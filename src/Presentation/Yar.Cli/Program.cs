@@ -7,7 +7,7 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
@@ -69,6 +69,37 @@ if (command == "permissions")
     Console.WriteLine($"{app.Name}: {report.Verdict}");
     foreach (var note in report.Notes)
         Console.WriteLine($"  {note.Weight,-6} {note.Text}{(note.Detail is null ? "" : $" ({note.Detail})")}");
+    return 0;
+}
+
+// yar-apps storage: disks, and where the space goes, as the Storage tab will show it.
+if (command == "storage")
+{
+    var loaded = await host.Catalog.LoadAsync(CancellationToken.None);
+    var overview = await host.Storage.AnalyzeAsync(loaded, CancellationToken.None);
+    if (json)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(
+            overview, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        return 0;
+    }
+    static string Gb(long? bytes) => bytes is { } b ? $"{b / 1e9,8:0.0} GB" : "          -";
+    foreach (var disk in overview.Disks)
+    {
+        Console.WriteLine($"{disk.Name}  {disk.Model}  {Gb(disk.SizeBytes)}  not in any partition: {Gb(disk.UnallocatedBytes)}");
+        foreach (var part in disk.Partitions)
+        {
+            Console.WriteLine(
+                $"  {part.Name,-10} {part.FileSystem ?? "-",-6} size {Gb(part.SizeBytes)} used {Gb(part.UsedBytes)} free {Gb(part.FreeBytes)}  {string.Join(",", part.MountPoints)}");
+        }
+    }
+    Console.WriteLine();
+    foreach (var item in overview.Items.Take(25))
+    {
+        Console.WriteLine(
+            $"{item.Kind,-12} {(item.AtLeast ? ">=" : "  ")}{item.Bytes / 1e6,10:0.0} MB  (data {item.DataBytes / 1e6,8:0.0} MB)  {item.Title}");
+    }
+    Console.WriteLine($"{overview.Items.Count} items, {overview.AccountedBytes / 1e9:0.0} GB accounted for");
     return 0;
 }
 

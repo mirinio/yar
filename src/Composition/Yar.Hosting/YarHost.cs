@@ -55,6 +55,7 @@ public sealed class YarHost : IDisposable
         ];
 
         _providers = providers;
+        Storage = new StorageAnalyzer(new LsblkProbe(new ProcessRunner()), providers, Dirs.CacheHome, Dirs.Home);
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
         Store = new StoreCatalogReader(Dirs, Cache);
         _online = new OnlineStoreData(
@@ -75,6 +76,9 @@ public sealed class YarHost : IDisposable
     public OsRelease Os { get; }
 
     public AppCatalog Catalog { get; }
+
+    /// <summary>Works out where disk space goes. Slow enough to run only when asked.</summary>
+    public StorageAnalyzer Storage { get; }
 
     /// <summary>The app catalogs already on this computer. Reading them needs no network.</summary>
     public IStoreCatalogReader Store { get; }

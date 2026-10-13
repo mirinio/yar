@@ -150,6 +150,21 @@ internal static class Widgets
         }
     }
 
+    /// <summary>A short bar showing how much of something is used.</summary>
+    public static Gtk.LevelBar UsageBar(long used, long total)
+    {
+        var bar = Gtk.LevelBar.New();
+        bar.MinValue = 0;
+        bar.MaxValue = 1;
+        // One colour at every level: a full bar here means "the biggest", not "good" or "bad".
+        foreach (var offset in new[] { "low", "high", "full" })
+            bar.RemoveOffsetValue(offset);
+        bar.Value = total > 0 ? Math.Clamp((double)used / total, 0, 1) : 0;
+        bar.SetSizeRequest(140, -1);
+        bar.Valign = Gtk.Align.Center;
+        return bar;
+    }
+
     /// <summary>How well Yar knows a source, as a coloured tag: green for the system's own, amber for the unknown.</summary>
     public static Gtk.Label TrustTag(TrustLevel trust)
     {

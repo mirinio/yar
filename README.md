@@ -11,6 +11,7 @@ Store, or from a file you downloaded yourself — in one friendly place.
 
 ## What works today
 
+- **Storage**: how full each disk is, which parts of a disk Linux is not using, and a block picture of what your apps take: each app with its data, the parts Flatpak apps share, temporary files and data left behind. For everything else it hands over to Filelight or Disk Usage Analyzer. It measures; it removes nothing
 - **Worth a look**: a note in My Apps when something could be tidied: the same app installed twice, menu entries whose program is gone, apps that are not in your menu, and data left behind by removed Flatpak apps. It shows and explains; it removes nothing yet
 - **My Apps**: every app in your app menu, split into "From sources" and "Installed myself", with category tags, search and filters
 - **App pages**: an Open button, where the app came from, its version and size, where it lives and where it keeps your data, and what it is allowed to reach on your computer, in plain words

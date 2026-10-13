@@ -1,3 +1,5 @@
 [*.cs]
 # Test names read as sentences.
 dotnet_diagnostic.CA1707.severity = none
+# Arrays written out in a test are part of what makes it readable.
+dotnet_diagnostic.CA1861.severity = none
