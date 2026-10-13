@@ -10,8 +10,12 @@ public sealed record UndoStep(ChangeRecord Of, string Summary, ChangePlan? Plan,
 /// takes its turn behind any change already running, and can be undone where that is possible.
 /// </summary>
 public sealed class AppChanges(
-    IReadOnlyList<ISoftwareProvider> providers, OperationRunner runner, ITrash trash, IThirdPartyPolicy? thirdParty = null)
+    IReadOnlyList<ISoftwareProvider> providers, OperationRunner runner, ITrash trash, IThirdPartyPolicy? thirdParty = null,
+    IAppPinner? pinner = null)
 {
+    /// <summary>Set in a record's <see cref="ChangeRecord.Undo"/> when the app was added but could not be pinned.</summary>
+    public const string PinProblem = "pin-problem";
+
     public const string ThirdPartyProvider = "third-party";
 
     public Task<ChangeRecord> SwitchSourceAsync(SourceInfo source, bool enabled, string? undoOf = null) =>
@@ -82,6 +86,21 @@ public sealed class AppChanges(
                 Refuse(plan);
                 var added = await intake.AddAsync(report, choices, plan, context.Progress, context.Ct).ConfigureAwait(false);
                 context.Amend(record => record with { ProviderId = added.ProviderId, Target = added.AppId, Name = added.Name });
+                if (!choices.Pin || !IsLauncherId(added.AppId))
+                    return;
+                // The app is in place either way; a taskbar that can't be changed is told, not treated as a failure.
+                try
+                {
+                    await (pinner ?? throw new InvalidOperationException("I can't pin apps on this desktop."))
+                        .PinAsync(added.AppId, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception e) when (e is InvalidOperationException or TimeoutException)
+                {
+                    context.Amend(record => record with
+                    {
+                        Undo = new Dictionary<string, string>(record.Undo) { [PinProblem] = e.Message },
+                    });
+                }
             });
 
     /// <summary>Carries out a plan from <see cref="IAppRemover.PlanRemovalAsync"/>.</summary>
@@ -94,6 +113,17 @@ public sealed class AppChanges(
                 var result = await Ability<IAppRemover>(plan.ProviderId)
                     .RemoveAsync(plan, removeData, context.Progress, context.Ct).ConfigureAwait(false);
                 context.Amend(record => record with { Trashed = result.Trashed });
+                // A launcher that is gone should not stay behind on the taskbar. Not being able to tidy that up is no failure.
+                if (pinner is { WhyNot: null } && IsLauncherId(plan.Target))
+                {
+                    try
+                    {
+                        await pinner.UnpinAsync(plan.Target, CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (Exception e) when (e is InvalidOperationException or TimeoutException)
+                    {
+                    }
+                }
             });
 
     /// <summary>Why a change in the record cannot be undone, in plain words; null when it can.</summary>
@@ -192,6 +222,10 @@ public sealed class AppChanges(
                 throw new InvalidOperationException("I don't know how to undo this.");
         }
     }
+
+    // Launchers Yar itself wrote; nothing else is ever pinned or unpinned.
+    private static bool IsLauncherId(string id) =>
+        id.StartsWith("yar-", StringComparison.Ordinal) && id.EndsWith(".desktop", StringComparison.Ordinal) && !id.Contains('/');
 
     private static ChangeRecord Begin(ChangeKind kind, ChangePlan plan, string? undoOf) =>
         ChangeRecord.Begin(kind, plan.ProviderId, plan.Target, plan.Name) with

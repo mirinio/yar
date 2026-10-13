@@ -200,6 +200,7 @@ internal static class AddAppPage
         Adw.ComboRow? programs = null;
         var menu = Adw.SwitchRow.New();
         var move = Adw.SwitchRow.New();
+        var pin = Adw.SwitchRow.New();
         if (report.FolderIsChoosable)
         {
             var place = Widgets.Group(
@@ -256,6 +257,26 @@ internal static class AddAppPage
             menu.Subtitle = T._("So you can start it like any other app.");
             menu.Active = true;
             shortcuts.Add(menu);
+            pin.Title = T._("Pin to the taskbar");
+            if (ui.Host.Pinner.WhyNot is { } whyNoPin)
+            {
+                pin.Sensitive = false;
+                pin.Subtitle = T._(whyNoPin);
+            }
+            else
+            {
+                pin.Subtitle = T._("Always one click away. You can unpin it there at any time.");
+                // Only an app with a menu entry has something to pin.
+                menu.OnNotify += (_, args) =>
+                {
+                    if (args.Pspec.GetName() != "active")
+                        return;
+                    pin.Sensitive = menu.Active;
+                    if (!menu.Active)
+                        pin.Active = false;
+                };
+            }
+            shortcuts.Add(pin);
             if (!downloaded)
             {
                 move.Title = report.Kind == BundleKind.Archive
@@ -347,6 +368,7 @@ internal static class AddAppPage
                     ? report.Programs[(int)programs.Selected].Path
                     : null,
                 AppMenu = menu.Active,
+                Pin = pin.Active && menu.Active,
                 DeleteOriginal = downloaded || move.Active,
                 HashVerified = hashVerified,
             };
@@ -368,7 +390,11 @@ internal static class AddAppPage
                     ui.Host.Intake.Discard(report);
                 if (downloaded)
                     ui.Host.Downloader.Discard(report.SourcePath);
-                ChangeDialog.Report(ui, done, T.F("{0} is added. You find it under My Apps and in your app menu.", plan.Name));
+                ChangeDialog.Report(
+                    ui, done,
+                    done.Undo.TryGetValue(AppChanges.PinProblem, out var pinProblem)
+                        ? T.F("{0} is added, but not pinned: {1}", plan.Name, T._(pinProblem))
+                        : T.F("{0} is added. You find it under My Apps and in your app menu.", plan.Name));
             });
 
             // A package from a website gets administrator rights while it installs; that deserves its own yes.

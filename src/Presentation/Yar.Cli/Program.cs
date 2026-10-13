@@ -255,6 +255,7 @@ if (command is "inspect" or "add")
         IconPath = given.TryGetValue("--icon", out var picture) ? Path.GetFullPath(picture) : report.IconPath,
         Program = given.GetValueOrDefault("--program"),
         AppMenu = !args.Contains("--no-menu"),
+        Pin = args.Contains("--pin"),
         DeleteOriginal = fetched is not null || args.Contains("--move"),
         HashVerified = verified,
     };
@@ -282,6 +283,8 @@ if (command is "inspect" or "add")
     if (fetched is not null)
         host.Downloader.Discard(fetched);
     Console.WriteLine($"done ({added.Id}) {added.Target}");
+    if (added.Undo.TryGetValue(Yar.Core.AppChanges.PinProblem, out var pinProblem))
+        Console.WriteLine($"not pinned: {pinProblem}");
     return 0;
 }
 

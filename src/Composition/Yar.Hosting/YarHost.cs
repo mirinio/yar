@@ -70,7 +70,8 @@ public sealed class YarHost : IDisposable
         Operations = new OperationRunner(Journal);
         Storage = new StorageAnalyzer(new LsblkProbe(new ProcessRunner()), providers, Dirs.CacheHome, Dirs.Home);
         ThirdParty = new FedoraThirdParty(new ProcessRunner());
-        Make = new AppChanges(providers, Operations, Trash, ThirdParty);
+        Pinner = new DesktopPinner(new ProcessRunner(), desktops);
+        Make = new AppChanges(providers, Operations, Trash, ThirdParty, Pinner);
         DefaultAppsFolder = Path.Combine(Dirs.Home, "Applications");
         _downloader = new LinkDownloader(Path.Combine(Dirs.CacheHome, "yar", "downloads"));
         Intake = new BundleIntake(
@@ -141,6 +142,9 @@ public sealed class YarHost : IDisposable
 
     /// <summary>Takes apps the user brings as a file or a link.</summary>
     public IAppIntake Intake { get; }
+
+    /// <summary>Pins added apps to the taskbar where this desktop allows it. Check WhyNot first.</summary>
+    public IAppPinner Pinner { get; }
 
     /// <summary>Fetches a file from a link the user gave. Only ever on the user's say-so.</summary>
     public IAppDownloader Downloader => _downloader;
