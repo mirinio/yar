@@ -255,8 +255,10 @@ public class AppCatalogTests
     [InlineData("")]
     [InlineData("{ not json")]
     [InlineData("{\"formatVersion\":999,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":null}")]
-    [InlineData("{\"formatVersion\":1,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":{\"apps\":null}}")]
-    [InlineData("{\"formatVersion\":1,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":{\"providers\":[],\"sources\":[],\"apps\":[{\"name\":\"x\"}],\"duplicates\":[],\"unclaimedLaunchers\":[],\"updates\":[],\"facts\":[]}}")]
+    [InlineData("{\"formatVersion\":2,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":{\"apps\":null}}")]
+    // A snapshot saved by an older Yar, before the format changed.
+    [InlineData("{\"formatVersion\":1,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":{\"providers\":[],\"sources\":[],\"apps\":[],\"duplicates\":[],\"unclaimedLaunchers\":[],\"updates\":[],\"facts\":[]}}")]
+    [InlineData("{\"formatVersion\":2,\"savedAt\":\"2026-01-01T00:00:00Z\",\"snapshot\":{\"providers\":[],\"sources\":[],\"apps\":[{\"name\":\"x\"}],\"duplicates\":[],\"unclaimedLaunchers\":[],\"updates\":[],\"facts\":[]}}")]
     public void A_saved_snapshot_that_looks_wrong_counts_as_none(string content)
     {
         var cache = new MemoryCache { Entries = { [SnapshotCache.EntryName] = content } };
@@ -310,6 +312,41 @@ public class AppCatalogTests
         Assert.False(SnapshotCache.SameContent(apps, complete));
         Assert.Contains(complete.Timings, t => t.Stage == "claim:packagekit");
         Assert.Contains(complete.Timings, t => t.Stage == "updates:packagekit");
+    }
+
+    private sealed class LeftoverProvider(string id, Func<IReadOnlyList<AppInfo>, IReadOnlyList<LeftoverData>> find)
+        : FakeProvider(id), ILeftoverProvider
+    {
+        public Task<IReadOnlyList<LeftoverData>> FindLeftoversAsync(IReadOnlyList<AppInfo> installed, CancellationToken ct) =>
+            Task.FromResult(find(installed));
+    }
+
+    [Fact]
+    public async Task Leftovers_are_collected_in_phase_two_saved_and_never_fail_a_load()
+    {
+        var cache = new MemoryCache();
+        var seen = new List<string>();
+        var flatpak = new LeftoverProvider("flatpak", installed =>
+        {
+            seen.AddRange(installed.Select(a => a.Id));
+            return [new LeftoverData("flatpak", "com.gone.App", "/home/ada/.var/app/com.gone.App", 42)];
+        })
+        {
+            Claim = _ => [App("flatpak", "krita")],
+        };
+        var failing = new LeftoverProvider("snap", _ => throw new IOException("unreadable"));
+        var catalog = new AppCatalog(
+            [flatpak, failing], _ => Task.FromResult(DesktopEntryIndex.Empty), cache: cache);
+
+        var apps = await catalog.LoadAppsAsync(TestContext.Current.CancellationToken);
+        Assert.Empty(apps.Leftovers);
+        Assert.Empty(seen);
+
+        var complete = await catalog.LoadUpdatesAsync(apps, TestContext.Current.CancellationToken);
+        Assert.Equal(["krita"], seen);
+        Assert.Equal(42, Assert.Single(complete.Leftovers).SizeBytes);
+        Assert.All(complete.Providers, p => Assert.Equal(ProviderAvailability.Available, p.Status.Availability));
+        Assert.Equal("com.gone.App", Assert.Single(catalog.LoadCached()!.Leftovers).Id);
     }
 
     [Fact]

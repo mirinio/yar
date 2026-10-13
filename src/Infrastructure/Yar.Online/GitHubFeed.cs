@@ -33,7 +33,8 @@ public sealed class GitHubFeed : IDeveloperFeed, IDisposable
         _client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
     }
 
-    public async Task<IReadOnlyList<DevProject>> GetTrendingAsync(IReadOnlyList<string> languages, CancellationToken ct)
+    public async Task<IReadOnlyList<DevProject>> GetTrendingAsync(
+        IReadOnlyList<string> languages, FeedPeriod period, CancellationToken ct)
     {
         var queries = languages.Select(DevLanguages.QueryFor).Where(q => q is not null).Select(q => q!)
             .Distinct().Take(MaxLanguages).ToList();
@@ -41,7 +42,7 @@ public sealed class GitHubFeed : IDeveloperFeed, IDisposable
         var projects = new List<DevProject>();
         // One after another: GitHub counts searches per minute, and there is no hurry.
         foreach (var query in queries)
-            projects.AddRange(await ForLanguageAsync(query, ct).ConfigureAwait(false));
+            projects.AddRange(await ForLanguageAsync(query, period, ct).ConfigureAwait(false));
 
         return projects.DistinctBy(p => p.FullName, StringComparer.OrdinalIgnoreCase)
             .OrderByDescending(p => p.Stars).ToList();
@@ -81,16 +82,17 @@ public sealed class GitHubFeed : IDeveloperFeed, IDisposable
         return projects;
     }
 
-    private async Task<IReadOnlyList<DevProject>> ForLanguageAsync(string query, CancellationToken ct)
+    private async Task<IReadOnlyList<DevProject>> ForLanguageAsync(string query, FeedPeriod period, CancellationToken ct)
     {
-        var entryName = $"github-{query}.json";
+        var days = period switch { FeedPeriod.Week => 7, FeedPeriod.Year => 365, _ => 30 };
+        var entryName = $"github-{query}-{days}.json";
         var kept = ReadKept(entryName);
         if (kept is not null && _time.GetUtcNow() - kept.FetchedAt < KeepFor)
             return Parse(kept.Body);
 
         try
         {
-            var since = _time.GetUtcNow().AddDays(-30).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var since = _time.GetUtcNow().AddDays(-days).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
             var url = "https://api.github.com/search/repositories" +
                 $"?q={Uri.EscapeDataString($"created:>{since} language:{query}")}&sort=stars&order=desc&per_page={PerLanguage}";
             using var response = await _client.GetAsync(url, ct).ConfigureAwait(false);

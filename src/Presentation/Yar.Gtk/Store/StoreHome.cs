@@ -53,19 +53,6 @@ internal static class StoreHome
                 "your distribution does not publish such numbers for its own packages."));
         AddRow(page, ui, data, wanted, T._("Recently updated"), data.Collections.RecentlyUpdated, null);
 
-        if (data.DevProjects.Count > 0)
-        {
-            page.Append(Heading(
-                T._("For developers: new projects on GitHub"),
-                T._("Source-code projects started in the last month that many people starred, in the programming " +
-                    "languages you ticked in the settings. These are not apps I can install; a card opens the " +
-                    "project in your web browser.")));
-            var row = Gtk.Box.New(Gtk.Orientation.Horizontal, 12);
-            foreach (var project in data.DevProjects.Take(MaxPerRow))
-                row.Append(StoreCards.Repo(ui, project));
-            page.Append(Scroller(row));
-        }
-
         // The Store uses the whole width of the window; cards are what fill it.
         var scrolled = Gtk.ScrolledWindow.New();
         scrolled.SetPolicy(Gtk.PolicyType.Never, Gtk.PolicyType.Automatic);

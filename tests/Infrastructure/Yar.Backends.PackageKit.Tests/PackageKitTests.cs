@@ -11,6 +11,14 @@ public class PackageKitTests
         public Dictionary<string, string> Owners { get; } = [];
         public Dictionary<string, long> Sizes { get; } = [];
         public List<string> Searched { get; } = [];
+        public Dictionary<string, OfferSize> OfferSizes { get; } = [];
+        public List<string> SizeQuestions { get; } = [];
+
+        public Task<OfferSize?> GetOfferSizeAsync(string packageName, CancellationToken ct)
+        {
+            SizeQuestions.Add(packageName);
+            return Task.FromResult(OfferSizes.GetValueOrDefault(packageName));
+        }
         public List<(string RepoId, bool Enabled)> Switched { get; } = [];
 
         public Task SetRepoEnabledAsync(string repoId, bool enabled, CancellationToken ct)
@@ -333,6 +341,67 @@ public class PackageKitTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => provider.SetEnabledAsync(foreign, true, Token));
         await Assert.ThrowsAsync<NotSupportedException>(() => provider.AddAsync(new("x", "https://x/y.repo"), Token));
         await Assert.ThrowsAsync<NotSupportedException>(() => provider.RemoveAsync(repo, Token));
+    }
+
+    [Fact]
+    public async Task Says_how_big_a_package_on_offer_is_and_only_asks_about_plain_names()
+    {
+        var client = new FakeClient { OfferSizes = { ["krita"] = new(92_520_618, 221_796_243) } };
+        var provider = new PackageKitProvider(client, [], [Dir]);
+        StoreOffer Offer(string provider, string? package) => new(provider, "fedora", "org.kde.krita", package, null, false, null);
+
+        Assert.Equal(new OfferSize(92_520_618, 221_796_243), await provider.GetSizeAsync(Offer("packagekit", "krita"), Token));
+        Assert.Null(await provider.GetSizeAsync(Offer("packagekit", "unknown-package"), Token));
+        Assert.Null(await provider.GetSizeAsync(Offer("flatpak", "krita"), Token));
+        Assert.Null(await provider.GetSizeAsync(Offer("packagekit", "krita; rm -rf"), Token));
+        Assert.Null(await provider.GetSizeAsync(Offer("packagekit", null), Token));
+        Assert.Equal(["krita", "unknown-package"], client.SizeQuestions);
+    }
+
+    private const string InRelease =
+        "-----BEGIN PGP SIGNED MESSAGE-----\nHash: SHA512\n\nOrigin: Ubuntu\nLabel: Ubuntu\nSuite: noble-updates\n" +
+        "Version: 24.04\nCodename: noble\nDate: Mon, 13 Oct 2026 05:58:48 UTC\nArchitectures: amd64 arm64\n" +
+        "Components: main restricted universe multiverse\nDescription: Ubuntu Noble Updates\nSHA256:\n abc 123 main/x\n";
+
+    [Fact]
+    public void Builds_apt_repositories_with_the_ids_packagekit_uses_for_origins()
+    {
+        var repos = AptListsReader.Parse(InRelease, "/var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble-updates_InRelease");
+
+        Assert.Equal(
+            ["ubuntu-noble-updates-main", "ubuntu-noble-updates-restricted", "ubuntu-noble-updates-universe", "ubuntu-noble-updates-multiverse"],
+            repos.Select(r => r.Repo.Id));
+        Assert.Equal("Ubuntu noble-updates (main)", repos[0].Repo.Description);
+        Assert.Equal("archive.ubuntu.com", repos[0].Detail.Url);
+        Assert.Empty(AptListsReader.Parse("Origin: Ubuntu\nSuite: noble\n", "/x/y_InRelease"));
+        Assert.Empty(AptListsReader.Parse("not a release file", "/x/y_Release"));
+        Assert.Empty(new AptListsReader("/nonexistent/apt/lists").Read());
+    }
+
+    private sealed class FakeFallback(params (PkRepo, RepoDetail)[] repos) : IRepoListFallback
+    {
+        public IReadOnlyList<(PkRepo Repo, RepoDetail Detail)> Read() => repos;
+    }
+
+    [Fact]
+    public async Task Falls_back_to_the_package_managers_own_list_only_when_packagekit_reports_none()
+    {
+        var fallback = new FakeFallback(
+            (new PkRepo("ubuntu-noble-main", "Ubuntu noble (main)", true), new RepoDetail("", "archive.ubuntu.com", null, "/lists/a_InRelease")));
+
+        var silent = new PackageKitProvider(new FakeClient(), [], [Dir], repoFallbacks: [fallback]);
+        var source = Assert.Single(await silent.GetSourcesAsync(Token));
+        Assert.Equal("ubuntu-noble-main", source.Id);
+        Assert.Equal("Ubuntu noble (main)", source.Name);
+        Assert.Equal("archive.ubuntu.com", source.Url);
+        // PackageKit does not know this repository, so it cannot be switched from here.
+        Assert.False(silent.CanToggle(source));
+
+        var talkative = new PackageKitProvider(
+            new FakeClient { Repos = { new("fedora", "Fedora", true) } }, [], [Dir], repoFallbacks: [fallback]);
+        var reported = Assert.Single(await talkative.GetSourcesAsync(Token));
+        Assert.Equal("fedora", reported.Id);
+        Assert.True(talkative.CanToggle(reported));
     }
 
     [Fact]

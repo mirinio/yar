@@ -63,20 +63,16 @@ internal sealed class StorePage
     {
         _ui = ui;
 
-        // Switching online data or the developer section changes what may be fetched and shown.
-        var onlineKey = $"{ui.OnlineAllowed}|{string.Join(',', ui.DeveloperLanguages)}";
+        // Switching online data changes what may be fetched and shown.
+        var onlineKey = $"{ui.OnlineAllowed}";
         if (onlineKey != _onlineKey)
         {
             _onlineKey = onlineKey;
             _onlineRequested = false;
-            if (_data is not null)
+            if (_data is not null && !ui.OnlineAllowed)
             {
-                _data.DevProjects = [];
-                if (!ui.OnlineAllowed)
-                {
-                    _data.Collections = StoreCollections.Empty;
-                    _data.Ratings = null;
-                }
+                _data.Collections = StoreCollections.Empty;
+                _data.Ratings = null;
             }
         }
 
@@ -109,7 +105,6 @@ internal sealed class StorePage
             {
                 Collections = previous?.Collections ?? StoreCollections.Empty,
                 Ratings = previous?.Ratings,
-                DevProjects = previous?.DevProjects ?? [],
             };
         }
         catch (Exception e)
@@ -136,11 +131,6 @@ internal sealed class StorePage
 
         await Quietly(async () => data.Collections = await ui.Host.Online.GetCollectionsAsync(CancellationToken.None));
         await Quietly(async () => data.Ratings = await ui.Host.Online.GetRatingsAsync(CancellationToken.None));
-        if (ui.DeveloperLanguages.Count > 0)
-        {
-            await Quietly(async () => data.DevProjects =
-                await ui.Host.Developer.GetTrendingAsync(ui.DeveloperLanguages, CancellationToken.None));
-        }
     }
 
     private async Task Quietly(Func<Task> fetch)

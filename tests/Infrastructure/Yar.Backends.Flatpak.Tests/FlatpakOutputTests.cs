@@ -1,3 +1,5 @@
+using Yar.Core;
+
 namespace Yar.Backends.Flatpak.Tests;
 
 public class FlatpakOutputTests
@@ -42,6 +44,25 @@ public class FlatpakOutputTests
         Assert.Null(apps[2].Name);
         Assert.Null(apps[2].Version);
         Assert.Null(apps[2].SizeBytes);
+    }
+
+    [Fact]
+    public void Parses_permissions()
+    {
+        // Same shape as `flatpak info --show-permissions` prints for Thunderbird.
+        var raw = FlatpakOutput.ParsePermissions(
+            "[Context]\nshared=ipc;network;\nsockets=cups;fallback-x11;pulseaudio;wayland;x11;\ndevices=all;\n" +
+            "features=devel;\nfilesystems=xdg-download;xdg-run/gnupg:ro;~/.gnupg;\npersistent=.thunderbird;\n\n" +
+            "[Session Bus Policy]\norg.gtk.vfs.*=talk\norg.a11y.Bus=talk\norg.blocked.Thing=none\n\n" +
+            "[System Bus Policy]\norg.freedesktop.NetworkManager=talk\n\nstray line\n");
+
+        Assert.Equal(["ipc", "network"], raw.Shared);
+        Assert.Equal(["cups", "fallback-x11", "pulseaudio", "wayland", "x11"], raw.Sockets);
+        Assert.Equal(["all"], raw.Devices);
+        Assert.Equal(["xdg-download", "xdg-run/gnupg:ro", "~/.gnupg"], raw.Filesystems);
+        Assert.Equal(["org.gtk.vfs.*", "org.a11y.Bus"], raw.SessionBus);
+        Assert.Equal(["org.freedesktop.NetworkManager"], raw.SystemBus);
+        Assert.Empty(FlatpakOutput.ParsePermissions("").Filesystems);
     }
 
     [Fact]

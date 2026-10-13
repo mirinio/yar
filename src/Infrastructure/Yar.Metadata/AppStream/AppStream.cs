@@ -216,7 +216,19 @@ public sealed class ComponentIndex
     /// have not changed since last time are taken from it instead of being parsed again.
     /// </summary>
     public static ComponentIndex Load(XdgDirs dirs, CultureInfo? culture = null, ICacheStore? cache = null) =>
-        Load(AppStreamFiles(dirs), culture ?? CultureInfo.CurrentUICulture, cache, AppStreamXml.ReadFile);
+        Load(AppStreamFiles(dirs), culture ?? CultureInfo.CurrentUICulture, cache, ReadAny);
+
+    // XML on most distributions, YAML on Debian and Ubuntu; the index does not care which.
+    private static IReadOnlyList<AppStreamComponent> ReadAny(string path, CultureInfo? culture) =>
+        StoreCatalogReader.IsYaml(path)
+            ? Dep11Yaml.ReadFile(path, "packagekit", iconRoot: "", culture)
+                .Select(entry => new AppStreamComponent(
+                    entry.ComponentId, entry.Name, entry.Summary, entry.PackageName,
+                    entry.OtherIds.Count > 0
+                        ? entry.OtherIds
+                        : [entry.ComponentId.EndsWith(".desktop", StringComparison.Ordinal) ? entry.ComponentId : entry.ComponentId + ".desktop"]))
+                .ToList()
+            : AppStreamXml.ReadFile(path, culture);
 
     public static ComponentIndex Load(
         IReadOnlyList<string> files, CultureInfo culture, ICacheStore? cache,
@@ -306,9 +318,16 @@ public sealed class ComponentIndex
         var metainfoDirs = dirs.DataDirs.Prepend(dirs.DataHome).Distinct(StringComparer.Ordinal)
             .SelectMany(d => new[] { Path.Combine(d, "metainfo"), Path.Combine(d, "appdata") });
 
+        string[] yamlDirs =
+        [
+            "/usr/share/swcatalog/yaml", "/var/lib/swcatalog/yaml", "/var/cache/swcatalog/yaml",
+            "/usr/share/app-info/yaml", "/var/lib/app-info/yaml", "/var/cache/app-info/yaml",
+        ];
+
         return catalogDirs.SelectMany(d => Files(d, "*.xml*"))
             .Concat(metainfoDirs.SelectMany(d => Files(d, "*.xml")))
             .Where(f => f.EndsWith(".xml", StringComparison.Ordinal) || f.EndsWith(".xml.gz", StringComparison.Ordinal))
+            .Concat(yamlDirs.SelectMany(d => StoreCatalogReader.Files(d, yaml: true)))
             .ToList();
     }
 

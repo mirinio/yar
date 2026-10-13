@@ -13,6 +13,8 @@ public static class ScreenshotUrls
     {
         "dl.flathub.org",
         "dl.fedoraproject.org",
+        "appstream.ubuntu.com",
+        "appstream.debian.org",
     };
 
     private const int WantedWidth = 752;

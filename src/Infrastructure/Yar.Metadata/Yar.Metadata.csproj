@@ -3,6 +3,9 @@
     <ProjectReference Include="../../Core/Yar.Core/Yar.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="YamlDotNet" />
+  </ItemGroup>
+  <ItemGroup>
     <EmbeddedResource Include="../../../data/known-sources.json" LogicalName="known-sources.json" />
     <EmbeddedResource Include="../../../data/popular-sources.json" LogicalName="popular-sources.json" />
   </ItemGroup>

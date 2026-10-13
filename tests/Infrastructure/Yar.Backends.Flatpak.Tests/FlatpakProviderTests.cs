@@ -197,6 +197,67 @@ public class FlatpakProviderTests
     }
 
     [Fact]
+    public async Task Asks_flatpak_for_an_installed_apps_permissions()
+    {
+        var runner = new FakeRunner(_ => new(0, "[Context]\nshared=network;\nfilesystems=home;\n", ""));
+        var provider = new FlatpakProvider(runner, UserDir, "/usr/bin/flatpak");
+        AppInfo App(string providerId, string reference, string installation) => new(
+            providerId, "x", "X", null, null, null, null, null, null, null, [], "org.x.App",
+            new Dictionary<string, string> { ["ref"] = reference, ["installation"] = installation });
+
+        var raw = await provider.GetPermissionsAsync(App("flatpak", "org.x.App/x86_64/stable", "user"), Token);
+
+        Assert.Equal(["home"], raw?.Filesystems);
+        Assert.Equal(["info", "--show-permissions", "--user", "org.x.App/x86_64/stable"], Assert.Single(runner.Calls));
+        Assert.Null(await provider.GetPermissionsAsync(App("packagekit", "org.x.App/x86_64/stable", "system"), Token));
+        Assert.Null(await provider.GetPermissionsAsync(App("flatpak", "--show-location", "system"), Token));
+        Assert.Single(runner.Calls);
+    }
+
+    [Fact]
+    public async Task Finds_data_of_apps_that_are_gone_and_where_installed_apps_keep_theirs()
+    {
+        var root = Directory.CreateTempSubdirectory("yar-leftover-").FullName;
+        try
+        {
+            var data = Path.Combine(root, "var-app");
+            Directory.CreateDirectory(Path.Combine(data, "org.kde.krita", "config"));
+            Directory.CreateDirectory(Path.Combine(data, "com.gone.App", "cache"));
+            File.WriteAllBytes(Path.Combine(data, "com.gone.App", "cache", "blob"), new byte[3000]);
+            File.WriteAllBytes(Path.Combine(data, "com.gone.App", "settings"), new byte[500]);
+            // A link in that folder could point anywhere; it is neither followed nor reported.
+            var elsewhere = Directory.CreateDirectory(Path.Combine(root, "elsewhere")).FullName;
+            File.WriteAllBytes(Path.Combine(elsewhere, "huge"), new byte[9000]);
+            Directory.CreateSymbolicLink(Path.Combine(data, "com.linked.App"), elsewhere);
+            Directory.CreateSymbolicLink(Path.Combine(data, "com.gone.App", "link"), elsewhere);
+
+            var provider = new FlatpakProvider(
+                new FakeRunner(_ => new(0, FlatpakOutputTests.Apps, "")), UserDir, "/usr/bin/flatpak", appDataDir: data);
+            var installed = await provider.ClaimAppsAsync(DesktopEntryIndex.Empty, Token);
+
+            Assert.Equal(Path.Combine(data, "org.kde.krita"), installed[0].DataPath);
+            Assert.Null(installed[1].DataPath);
+
+            var leftover = Assert.Single(await provider.FindLeftoversAsync(installed, Token));
+            Assert.Equal("com.gone.App", leftover.Id);
+            Assert.Equal(Path.Combine(data, "com.gone.App"), leftover.Path);
+            Assert.Equal(3500, leftover.SizeBytes);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task Without_a_data_folder_there_are_no_leftovers()
+    {
+        var provider = new FlatpakProvider(new FakeRunner(_ => new(0, "", "")), UserDir, "/usr/bin/flatpak");
+
+        Assert.Empty(await provider.FindLeftoversAsync([], Token));
+    }
+
+    [Fact]
     public async Task A_refused_change_reports_what_flatpak_said()
     {
         var provider = new FlatpakProvider(

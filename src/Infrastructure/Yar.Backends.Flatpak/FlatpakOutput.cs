@@ -28,6 +28,51 @@ public static class FlatpakOutput
             .Select(row => new FlatpakUpdate(row[0], Optional(row[1]), Optional(row[2]), row[3]))
             .ToList();
 
+    /// <summary>
+    /// Parses what <c>flatpak info --show-permissions</c> prints: sections of <c>key=value;value;</c> lines.
+    /// </summary>
+    public static RawPermissions ParsePermissions(string output)
+    {
+        var context = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var sessionBus = new List<string>();
+        var systemBus = new List<string>();
+        var section = "";
+
+        foreach (var rawLine in output.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+            if (line[0] == '[' && line[^1] == ']')
+            {
+                section = line[1..^1];
+                continue;
+            }
+
+            var separator = line.IndexOf('=');
+            if (separator <= 0)
+                continue;
+            var key = line[..separator];
+            var value = line[(separator + 1)..];
+            switch (section)
+            {
+                case "Context":
+                    context[key] = [.. value.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+                    break;
+                // Here the key is the name of the other program; "none" means access was taken away.
+                case "Session Bus Policy" when value != "none":
+                    sessionBus.Add(key);
+                    break;
+                case "System Bus Policy" when value != "none":
+                    systemBus.Add(key);
+                    break;
+            }
+        }
+
+        List<string> Of(string key) => context.GetValueOrDefault(key) ?? [];
+        return new(Of("shared"), Of("sockets"), Of("devices"), Of("filesystems"), sessionBus, systemBus);
+    }
+
     public static IReadOnlyList<FlatpakRemote> ParseRemotes(string output) =>
         Rows(output, RemoteColumns.Length)
             .Where(row => row[0].Length > 0)

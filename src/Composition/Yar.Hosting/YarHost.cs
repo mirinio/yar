@@ -15,7 +15,7 @@ public sealed class YarHost : IDisposable
     /// <summary>Placeholder until the project has its real reverse-DNS ID.</summary>
     public const string AppId = "org.example.Yar";
 
-    private readonly SnapProvider _snap = new();
+    private readonly SnapProvider _snap;
     private readonly PackageKitClient _packageKit = new();
     private readonly OnlineStoreData _online;
     private readonly GitHubFeed _developer;
@@ -24,6 +24,7 @@ public sealed class YarHost : IDisposable
     public YarHost()
     {
         Dirs = XdgDirs.FromEnvironment();
+        _snap = new SnapProvider(userSnapDir: Path.Combine(Dirs.Home, "snap"));
         Os = OsRelease.Read();
 
         var path = Environment.GetEnvironmentVariable("PATH");
@@ -41,13 +42,15 @@ public sealed class YarHost : IDisposable
         // Claim order matters: each provider only sees the launchers the earlier ones left.
         ISoftwareProvider[] providers =
         [
-            new FlatpakProvider(new ProcessRunner(), flatpakUserDir),
+            new FlatpakProvider(
+                new ProcessRunner(), flatpakUserDir, appDataDir: Path.Combine(Dirs.Home, ".var", "app")),
             _snap,
             new PackageKitProvider(
                 _packageKit, [RepoFileReader.ForSystem()],
                 Dirs.DataDirs.Select(d => Path.Combine(d, "applications")).ToList(),
                 Os.HomeUrl,
-                Cache),
+                Cache,
+                [new AptListsReader()]),
             ManualAppsProvider.ForUser(Dirs, path),
         ];
 
@@ -87,6 +90,10 @@ public sealed class YarHost : IDisposable
 
     /// <summary>The folders programs are looked for in.</summary>
     public IReadOnlyList<string> SearchPath { get; }
+
+    /// <summary>An optional ability of a provider, such as telling an app's permissions; null if it has none.</summary>
+    public T? Ability<T>(string providerId)
+        where T : class => _providers.FirstOrDefault(p => p.Id == providerId) as T;
 
     /// <summary>The part of a provider that can change its sources, if it has one.</summary>
     public ISourceManager? SourceManagerFor(string providerId) =>

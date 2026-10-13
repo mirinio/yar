@@ -70,15 +70,15 @@ internal static class SettingsDialog
         YarHost host, Settings settings)
     {
         var group = Widgets.Group(
-            T._("For developers"),
+            T._("Open Source tab"),
             T._("Not needed for using apps. Leave it off if you do not write software."),
-            T._("When on, the Store's front page gets a row of source-code projects from GitHub that were started " +
-                "in the last month and that many people marked with a star, for the programming languages you tick. " +
+            T._("When on, the sidebar gets an Open Source tab. It lists source-code projects on GitHub that were " +
+                "started recently and that many people marked with a star, for the programming languages you tick. " +
                 "I ask GitHub's public search for them, without any account. These are projects to read about, " +
                 "not apps I can install."));
 
         var developer = Adw.SwitchRow.New();
-        developer.Title = T._("Show new projects from GitHub in the Store");
+        developer.Title = T._("Show the Open Source tab");
         developer.Subtitle = T._("Needs the internet switch above to be on.");
         developer.Active = settings.ShowDeveloperProjects;
         group.Add(developer);

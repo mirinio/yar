@@ -14,8 +14,9 @@ public sealed class SnapProvider : ISoftwareProvider, IUpdateProvider, IDisposab
 
     private readonly string _socketPath;
     private readonly HttpClient _client;
+    private readonly string? _userSnapDir;
 
-    public SnapProvider(string socketPath = DefaultSocketPath)
+    public SnapProvider(string socketPath = DefaultSocketPath, string? userSnapDir = null)
         : this(socketPath, new SocketsHttpHandler
         {
             ConnectCallback = async (_, ct) =>
@@ -32,13 +33,14 @@ public sealed class SnapProvider : ISoftwareProvider, IUpdateProvider, IDisposab
                     throw;
                 }
             },
-        })
+        }, userSnapDir)
     {
     }
 
     /// <summary>For tests: talk to snapd through the given handler instead of the socket.</summary>
-    public SnapProvider(string socketPath, HttpMessageHandler handler)
+    public SnapProvider(string socketPath, HttpMessageHandler handler, string? userSnapDir = null)
     {
+        _userSnapDir = userSnapDir;
         _socketPath = socketPath;
         _client = new HttpClient(handler)
         {
@@ -90,7 +92,11 @@ public sealed class SnapProvider : ISoftwareProvider, IUpdateProvider, IDisposab
         var json = await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false);
 
         return SnapdJson.ParseInstalledApps(json)
-            .Select(snap => ToApp(snap, LaunchersOf(snap, unclaimed)))
+            .Select(snap => ToApp(snap, LaunchersOf(snap, unclaimed)) with
+            {
+                DataPath = _userSnapDir is not null && Path.Combine(_userSnapDir, snap.Name) is var data &&
+                    Directory.Exists(data) ? data : null,
+            })
             .ToList();
     }
 

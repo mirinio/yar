@@ -111,6 +111,45 @@ internal static class Widgets
         return label;
     }
 
+    /// <summary>"What it can reach": an app's permissions as sentences, widest access first.</summary>
+    public static Adw.PreferencesGroup PermissionsGroup(PermissionReport? report, bool technical)
+    {
+        var group = Group(
+            T._("What it can reach"),
+            report is null
+                ? T._("Not kept apart: this app can do whatever you can on this computer.")
+                : PermissionVerdict(report.Verdict),
+            T._("Apps installed as Flatpak or Snap run in a protected space and can only reach what they were given " +
+                "permission for. That protects your files from a faulty or dishonest app. How much protection " +
+                "depends on the permissions: an app that may read all your files is not really kept apart. " +
+                "Ordinary system packages have no such space at all; they can do whatever you can."));
+        if (report is not null)
+            AddPermissionRows(group, report, technical);
+        return group;
+    }
+
+    public static string PermissionVerdict(PermissionWeight verdict) => verdict switch
+    {
+        PermissionWeight.Broad => T._("Broad access: this app is hardly kept apart from the rest of your system."),
+        PermissionWeight.Some => T._("Some access: kept apart, with a few doors open."),
+        _ => T._("Well separated: it can do little outside its own space."),
+    };
+
+    public static void AddPermissionRows(Adw.PreferencesGroup group, PermissionReport report, bool technical)
+    {
+        // Ordinary things every app needs are only listed for people who ask for technical details.
+        foreach (var note in report.Notes.Where(n => technical || n.Weight != PermissionWeight.Minor))
+        {
+            var row = Adw.ActionRow.New();
+            row.UseMarkup = false;
+            row.Title = T._(note.Text);
+            row.Subtitle = note.Detail ?? "";
+            if (note.Weight == PermissionWeight.Broad)
+                row.AddSuffix(Tag(T._("Broad"), attention: true));
+            group.Add(row);
+        }
+    }
+
     /// <summary>How well Yar knows a source, as a coloured tag: green for the system's own, amber for the unknown.</summary>
     public static Gtk.Label TrustTag(TrustLevel trust)
     {
@@ -250,7 +289,8 @@ internal static class Widgets
     }
 
     /// <param name="matchedTag">The tag a search found this app by; it is shown highlighted.</param>
-    public static Adw.ActionRow AppRow(Ui ui, AppInfo app, AppCategory? matchedTag = null)
+    /// <param name="origin">Show where the app came from instead of its category, for telling two copies apart.</param>
+    public static Adw.ActionRow AppRow(Ui ui, AppInfo app, AppCategory? matchedTag = null, bool origin = false)
     {
         var row = Adw.ActionRow.New();
         row.UseMarkup = false;
@@ -261,7 +301,11 @@ internal static class Widgets
         row.AddPrefix(Presentation.IconFor(app, 32));
         if (ui.Presentation.UpdateFor(app) is not null)
             row.AddSuffix(Tag(T._("Update waiting"), attention: true));
-        if (matchedTag is { } matched)
+        if (origin)
+        {
+            row.AddSuffix(Tag(ui.Presentation.OriginName(app)));
+        }
+        else if (matchedTag is { } matched)
         {
             var tag = Tag(Presentation.CategoryName(matched));
             tag.AddCssClass("yar-match");

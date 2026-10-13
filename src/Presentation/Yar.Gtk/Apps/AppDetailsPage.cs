@@ -30,6 +30,16 @@ internal static class AppDetailsPage
         foreach (var category in app.Categories)
             tags.Append(Widgets.Tag(Presentation.CategoryName(category)));
         header.Append(tags);
+        if (app.PrimaryLauncherPath is { } launcher && !app.Technical.ContainsKey("broken"))
+        {
+            var open = Gtk.Button.NewWithLabel(T._("Open"));
+            open.AddCssClass("suggested-action");
+            open.AddCssClass("pill");
+            open.Halign = Gtk.Align.Center;
+            open.MarginTop = 12;
+            open.OnClicked += (_, _) => AppLauncher.Start(ui, app, launcher);
+            header.Append(open);
+        }
         var headerGroup = Adw.PreferencesGroup.New();
         headerGroup.Add(header);
         page.Add(headerGroup);
@@ -57,6 +67,7 @@ internal static class AppDetailsPage
         page.Add(about);
 
         page.Add(CreateLocations(ui, app));
+        AddPermissions(ui, app, page);
 
         if (ui.Technical)
         {
@@ -98,8 +109,31 @@ internal static class AppDetailsPage
 
         if (app.Technical.TryGetValue("program", out var program) && program != app.InstallPath)
             group.Add(Widgets.PathRow(ui, T._("Program"), program));
+        if (app.DataPath is not null)
+            group.Add(Widgets.PathRow(ui, T._("Where it keeps your data"), app.DataPath));
         foreach (var launcher in app.LauncherPaths)
             group.Add(Widgets.PathRow(ui, T._("App menu entry"), launcher));
         return group;
+    }
+
+    // Flatpak apps are asked for their permissions when the page opens; the group appears when the answer does.
+    private static async void AddPermissions(Ui ui, AppInfo app, Adw.PreferencesPage page)
+    {
+        if (ui.Host.Ability<IPermissionProvider>(app.ProviderId) is not { } provider)
+        {
+            // Snaps are confined too, but I cannot read their rules yet, so I say nothing rather than guess.
+            if (app.ProviderId != "snap")
+                page.Add(Widgets.PermissionsGroup(null, ui.Technical));
+            return;
+        }
+
+        try
+        {
+            if (await provider.GetPermissionsAsync(app, CancellationToken.None) is { } raw)
+                page.Add(Widgets.PermissionsGroup(FlatpakPermissions.Describe(raw), ui.Technical));
+        }
+        catch (Exception e) when (e is InvalidOperationException or TimeoutException or IOException)
+        {
+        }
     }
 }

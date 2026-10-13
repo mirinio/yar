@@ -10,7 +10,7 @@ namespace Yar.Core;
 public static class SnapshotCache
 {
     /// <summary>Raise this whenever a record inside the snapshot changes shape.</summary>
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     public const string EntryName = "snapshot.json";
 

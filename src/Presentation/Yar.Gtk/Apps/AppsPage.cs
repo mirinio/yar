@@ -18,6 +18,7 @@ internal sealed class AppsPage
 
     private readonly List<Section> _sections = [];
     private Gtk.DropDown? _categoryDropDown;
+    private Adw.PreferencesGroup? _attention;
     private List<AppCategory?> _categoryChoices = [null];
     private Origin _origin = Origin.All;
     private AppCategory? _category;
@@ -102,6 +103,22 @@ internal sealed class AppsPage
                 _page.Remove(group);
         }
         _sections.Clear();
+
+        if (_attention is not null)
+            _page.Remove(_attention);
+        _attention = null;
+        var attention = AttentionFinder.Find(ui.Snapshot);
+        if (attention.Count > 0)
+        {
+            _attention = Adw.PreferencesGroup.New();
+            var row = Widgets.Navigation(
+                T.F(attention.Count == 1 ? "{0} thing is worth a look" : "{0} things are worth a look", attention.Count),
+                T._("Apps installed twice, menu entries that lead nowhere, or data left behind"),
+                () => ui.Push(AttentionPage.Create(ui, attention)));
+            row.AddPrefix(Gtk.Image.NewFromIconName("dialog-information-symbolic"));
+            _attention.Add(row);
+            _page.Add(_attention);
+        }
 
         RebuildCategoryChoices(ui.Snapshot.Apps);
 
@@ -221,6 +238,9 @@ internal sealed class AppsPage
             anyVisible |= sectionVisible;
         }
 
+        // The note about things worth a look belongs to the full list, not to a filtered one.
+        if (_attention is not null)
+            _attention.Visible = _origin == Origin.All && _category is null;
         _stack.VisibleChildName = anyVisible ? "list" : _sections.Count == 0 ? "nothing-installed" : "nothing-found";
     }
 

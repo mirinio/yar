@@ -27,8 +27,6 @@ internal sealed class StoreData(IReadOnlyList<StoreApp> apps)
 
     public IReadOnlyDictionary<string, StarRating>? Ratings { get; set; }
 
-    public IReadOnlyList<DevProject> DevProjects { get; set; } = [];
-
     public StoreCollections Collections
     {
         get => _collections;

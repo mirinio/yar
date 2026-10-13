@@ -135,7 +135,7 @@ public sealed class ImageAndGitHubTests : IDisposable
         var web = new Web(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Search) });
         using var feed = new GitHubFeed(cache, web, clock);
 
-        var projects = await feed.GetTrendingAsync(["C#", "Rust", "C#", "Klingon"], Token);
+        var projects = await feed.GetTrendingAsync(["C#", "Rust", "C#", "Klingon"], FeedPeriod.Month, Token);
 
         Assert.Equal(2, web.Requests.Count);
         Assert.All(web.Requests, r => Assert.StartsWith("https://api.github.com/search/repositories?q=", r));
@@ -144,12 +144,29 @@ public sealed class ImageAndGitHubTests : IDisposable
         // The same project found under two languages is listed once, most stars first.
         Assert.Equal(["ada/engine", "bob/tool"], projects.Select(p => p.FullName));
 
-        await feed.GetTrendingAsync(["C#", "Rust"], Token);
+        await feed.GetTrendingAsync(["C#", "Rust"], FeedPeriod.Month, Token);
         Assert.Equal(2, web.Requests.Count);
 
         clock.Now += TimeSpan.FromHours(7);
-        await feed.GetTrendingAsync(["C#"], Token);
+        await feed.GetTrendingAsync(["C#"], FeedPeriod.Month, Token);
         Assert.Equal(3, web.Requests.Count);
+    }
+
+    [Fact]
+    public async Task Each_period_looks_back_its_own_distance_and_is_kept_separately()
+    {
+        var cache = new MemoryCache();
+        var web = new Web(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(Search) });
+        using var feed = new GitHubFeed(cache, web, new Clock());
+
+        await feed.GetTrendingAsync(["Rust"], FeedPeriod.Week, Token);
+        await feed.GetTrendingAsync(["Rust"], FeedPeriod.Year, Token);
+        await feed.GetTrendingAsync(["Rust"], FeedPeriod.Week, Token);
+
+        Assert.Equal(2, web.Requests.Count);
+        Assert.Contains("created%3A%3E2026-10-06", web.Requests[0]);
+        Assert.Contains("created%3A%3E2025-10-13", web.Requests[1]);
+        Assert.Equal(["github-rust-365.json", "github-rust-7.json"], cache.Entries.Keys.Order());
     }
 
     [Fact]
@@ -164,14 +181,14 @@ public sealed class ImageAndGitHubTests : IDisposable
         using var feed = new GitHubFeed(cache, web, clock);
 
         limited = true;
-        Assert.Empty(await feed.GetTrendingAsync(["Go"], Token));
+        Assert.Empty(await feed.GetTrendingAsync(["Go"], FeedPeriod.Month, Token));
 
         limited = false;
-        Assert.Equal(2, (await feed.GetTrendingAsync(["Go"], Token)).Count);
+        Assert.Equal(2, (await feed.GetTrendingAsync(["Go"], FeedPeriod.Month, Token)).Count);
 
         limited = true;
         clock.Now += TimeSpan.FromHours(7);
-        Assert.Equal(2, (await feed.GetTrendingAsync(["Go"], Token)).Count);
+        Assert.Equal(2, (await feed.GetTrendingAsync(["Go"], FeedPeriod.Month, Token)).Count);
     }
 
     [Fact]
@@ -180,7 +197,7 @@ public sealed class ImageAndGitHubTests : IDisposable
         var web = new Web(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"items\":[]}") });
         using var feed = new GitHubFeed(null, web);
 
-        await feed.GetTrendingAsync(DevLanguages.All.Select(l => l.Name).ToList(), Token);
+        await feed.GetTrendingAsync(DevLanguages.All.Select(l => l.Name).ToList(), FeedPeriod.Month, Token);
 
         Assert.Equal(GitHubFeed.MaxLanguages, web.Requests.Count);
     }

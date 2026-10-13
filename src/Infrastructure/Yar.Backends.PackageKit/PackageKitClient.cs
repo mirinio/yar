@@ -93,6 +93,33 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     public Task<IReadOnlyList<PkPackage>> SearchInstalledFileAsync(string path, CancellationToken ct) =>
         CollectPackagesAsync(transaction => transaction.SearchFilesAsync(FilterInstalled, [path]), ct);
 
+    public async Task<OfferSize?> GetOfferSizeAsync(string packageName, CancellationToken ct)
+    {
+        var candidates = await CollectPackagesAsync(
+            transaction => transaction.ResolveAsync(FilterNone, [packageName]), ct).ConfigureAwait(false);
+        // Several sources may offer it; the last one listed is the newest the backend knows.
+        var chosen = candidates.LastOrDefault(p => p.Name == packageName && !p.Data.StartsWith("installed", StringComparison.Ordinal))
+            ?? candidates.LastOrDefault(p => p.Name == packageName);
+        if (chosen is null)
+            return null;
+
+        OfferSize? found = null;
+        await RunAsync(
+            async transaction => [await transaction.WatchDetailsAsync(
+                details =>
+                {
+                    long? Bytes(string key) =>
+                        details.TryGetValue(key, out var value) && value.Type == VariantValueType.UInt64 && value.GetUInt64() > 0
+                            ? (long)Math.Min(value.GetUInt64(), long.MaxValue)
+                            : null;
+                    found = new OfferSize(Bytes("download-size"), Bytes("size"));
+                },
+                emitOnCapturedContext: false).ConfigureAwait(false)],
+            transaction => transaction.GetDetailsAsync([chosen.PackageId]),
+            ct).ConfigureAwait(false);
+        return found;
+    }
+
     public async Task<IReadOnlyDictionary<string, long>> GetSizesAsync(
         IReadOnlyList<string> packageIds, CancellationToken ct)
     {

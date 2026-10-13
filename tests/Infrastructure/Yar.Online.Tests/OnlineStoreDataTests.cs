@@ -53,6 +53,29 @@ public class OnlineStoreDataTests
     }
 
     [Fact]
+    public void Parses_an_apps_sizes_and_permissions()
+    {
+        var summary = OnlineStoreData.ParseSummary("""
+            {"arches":["x86_64"],"download_size":263675826,"installed_size":636851712,
+             "metadata":{"name":"org.kde.krita","permissions":{
+               "session-bus":{"talk":["com.canonical.AppMenu.Registrar"],"own":["org.kde.krita"]},
+               "sockets":["pulseaudio","x11"],"devices":["dri"],"shared":["ipc","network"],
+               "filesystems":["host","xdg-run/gvfs", 7]}}}
+            """);
+
+        Assert.Equal(new OfferSize(263675826, 636851712), summary?.Size);
+        Assert.Equal(["host", "xdg-run/gvfs"], summary?.Permissions?.Filesystems);
+        Assert.Equal(["com.canonical.AppMenu.Registrar", "org.kde.krita"], summary?.Permissions?.SessionBus);
+        Assert.Empty(summary!.Permissions!.SystemBus);
+
+        var bare = OnlineStoreData.ParseSummary("{\"download_size\":0,\"installed_size\":10}");
+        Assert.Equal(new OfferSize(null, 10), bare?.Size);
+        Assert.Null(bare?.Permissions);
+        Assert.Null(OnlineStoreData.ParseSummary("{\"detail\":\"Not Found\"}"));
+        Assert.Null(OnlineStoreData.ParseSummary("garbage"));
+    }
+
+    [Fact]
     public void Parses_ratings()
     {
         var ratings = OnlineStoreData.ParseRatings(

@@ -28,6 +28,7 @@ public sealed class OnlineStoreData : IOnlineStoreData, IDisposable
     private readonly TimeProvider _time;
     private readonly ImageStore? _images;
     private readonly Dictionary<string, InstallStats?> _stats = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, AppSummary?> _summaries = new(StringComparer.Ordinal);
 
     public OnlineStoreData(
         ICacheStore? cache, string? distroName, CultureInfo? culture = null,
@@ -73,8 +74,7 @@ public sealed class OnlineStoreData : IOnlineStoreData, IDisposable
 
     public async Task<InstallStats?> GetInstallStatsAsync(string appId, CancellationToken ct)
     {
-        // App IDs are dotted names; anything else is not sent anywhere.
-        if (appId.Length is 0 or > 255 || !appId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-'))
+        if (!IsAppId(appId))
             return null;
         lock (_stats)
         {
@@ -90,6 +90,25 @@ public sealed class OnlineStoreData : IOnlineStoreData, IDisposable
         lock (_stats)
             _stats[appId] = stats;
         return stats;
+    }
+
+    public async Task<AppSummary?> GetAppSummaryAsync(string appId, CancellationToken ct)
+    {
+        if (!IsAppId(appId))
+            return null;
+        lock (_summaries)
+        {
+            if (_summaries.TryGetValue(appId, out var known))
+                return known;
+        }
+
+        using var response = await _client.GetAsync(FlathubApi + "summary/" + appId, ct).ConfigureAwait(false);
+        var summary = response.IsSuccessStatusCode
+            ? ParseSummary(await response.Content.ReadAsStringAsync(ct).ConfigureAwait(false))
+            : null;
+        lock (_summaries)
+            _summaries[appId] = summary;
+        return summary;
     }
 
     public Task<byte[]?> GetImageAsync(string url, CancellationToken ct) =>
@@ -155,6 +174,46 @@ public sealed class OnlineStoreData : IOnlineStoreData, IDisposable
             .OrderBy(app => Number(app, "position") ?? double.MaxValue)
             .Select(app => new StoreListing(Text(app, "app_id")!))
             .ToList();
+    }
+
+    // App IDs are dotted names; anything else is not sent anywhere.
+    private static bool IsAppId(string appId) =>
+        appId.Length is > 0 and <= 255 && appId.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-');
+
+    /// <summary>Parses Flathub's summary of an app: its sizes and what it is allowed to reach.</summary>
+    public static AppSummary? ParseSummary(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("installed_size", out _))
+                return null;
+
+            long? Bytes(string property) => Number(root, property) is { } value and > 0 ? (long)value : null;
+            RawPermissions? permissions = null;
+            if (root.TryGetProperty("metadata", out var metadata) && metadata.ValueKind == JsonValueKind.Object &&
+                metadata.TryGetProperty("permissions", out var granted) && granted.ValueKind == JsonValueKind.Object)
+            {
+                List<string> List(JsonElement parent, string property) =>
+                    parent.TryGetProperty(property, out var list) && list.ValueKind == JsonValueKind.Array
+                        ? list.EnumerateArray().Where(item => item.ValueKind == JsonValueKind.String)
+                            .Select(item => item.GetString()!).ToList()
+                        : [];
+                List<string> Bus(string property) =>
+                    granted.TryGetProperty(property, out var bus) && bus.ValueKind == JsonValueKind.Object
+                        ? [.. List(bus, "talk"), .. List(bus, "own")]
+                        : [];
+                permissions = new(
+                    List(granted, "shared"), List(granted, "sockets"), List(granted, "devices"),
+                    List(granted, "filesystems"), Bus("session-bus"), Bus("system-bus"));
+            }
+            return new(new OfferSize(Bytes("download_size"), Bytes("installed_size")), permissions);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     public static InstallStats? ParseStats(string json)

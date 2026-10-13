@@ -50,15 +50,20 @@ public sealed class CatalogAnnotator(
             return app;
 
         app.Technical.TryGetValue("package", out var packageName);
-        foreach (var path in app.LauncherPaths)
+        // A package can ship a main app and helpers ("Mousepad" and "Mousepad Settings"), each with
+        // its own description. The helper's ID is the main one's plus a suffix, so the shortest ID
+        // is the main app.
+        var match = app.LauncherPaths
+            .Select(path => launchers.TryGetValue(path, out var entry)
+                ? (Path: path, Entry: entry, Component: components.Find(entry.DesktopId, packageName))
+                : default)
+            .Where(found => found.Component is not null)
+            .OrderBy(found => StoreCatalog.Normalize(found.Component!.Id).Length)
+            .FirstOrDefault();
+        if (match.Component is { } component)
         {
-            if (!launchers.TryGetValue(path, out var entry) ||
-                components.Find(entry.DesktopId, packageName) is not { } component)
-            {
-                continue;
-            }
-
             // The launcher AppStream describes is the app's main one, whatever order the provider found.
+            var entry = match.Entry;
             var iconIsPath = entry.Icon is not null && Path.IsPathFullyQualified(entry.Icon);
             return app with
             {
@@ -67,7 +72,7 @@ public sealed class CatalogAnnotator(
                 ComponentId = app.ComponentId ?? component.Id,
                 IconName = iconIsPath ? null : entry.Icon,
                 IconPath = iconIsPath ? entry.Icon : null,
-                LauncherPaths = app.LauncherPaths.OrderByDescending(p => p == path).ToList(),
+                LauncherPaths = app.LauncherPaths.OrderByDescending(p => p == match.Path).ToList(),
             };
         }
         return app;

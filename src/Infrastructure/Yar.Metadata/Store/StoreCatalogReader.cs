@@ -17,7 +17,7 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
     : IStoreCatalogReader
 {
     private const int MaxDescriptionChars = 4000;
-    private const int CacheFormatVersion = 3;
+    private const int CacheFormatVersion = 4;
 
     private static readonly JsonSerializerOptions CacheOptions = new()
     {
@@ -48,6 +48,9 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
             try
             {
                 info = new FileInfo(file.Path);
+                // Ubuntu links its catalogs into place; the stamp that matters is the real file's.
+                if (info.ResolveLinkTarget(returnFinalTarget: true) is FileInfo target)
+                    info = target;
                 if (!info.Exists || info.Length > AppStreamXml.MaxFileBytes)
                     continue;
             }
@@ -59,7 +62,9 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
             var stamp = (info.LastWriteTimeUtc.Ticks, info.Length);
             if (!remembered.TryGetValue(file.Path, out var known) || (known.ModifiedTicks, known.Length) != stamp)
             {
-                known = new(stamp.Ticks, stamp.Length, ReadFile(file));
+                known = new(stamp.Ticks, stamp.Length, IsYaml(file.Path)
+                    ? [.. Dep11Yaml.ReadFile(file.Path, file.ProviderId, file.IconRoot, _culture)]
+                    : ReadFile(file));
                 changed = true;
             }
             current[file.Path] = known;
@@ -82,6 +87,9 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
         {
             var xmlDir = Path.Combine(root, root.EndsWith("app-info", StringComparison.Ordinal) ? "xmls" : "xml");
             foreach (var path in Files(xmlDir))
+                files.Add(new(path, "packagekit", SourceId: null, Path.Combine(root, "icons")));
+            // Debian and Ubuntu ship the same catalog as YAML.
+            foreach (var path in Files(Path.Combine(root, "yaml"), yaml: true))
                 files.Add(new(path, "packagekit", SourceId: null, Path.Combine(root, "icons")));
         }
 
@@ -345,13 +353,18 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
         return [];
     }
 
-    private static List<string> Files(string directory)
+    public static bool IsYaml(string path) =>
+        path.EndsWith(".yml", StringComparison.Ordinal) || path.EndsWith(".yml.gz", StringComparison.Ordinal);
+
+    public static List<string> Files(string directory, bool yaml = false)
     {
         try
         {
             return Directory.Exists(directory)
                 ? Directory.EnumerateFiles(directory)
-                    .Where(f => f.EndsWith(".xml", StringComparison.Ordinal) || f.EndsWith(".xml.gz", StringComparison.Ordinal))
+                    .Where(f => yaml
+                        ? IsYaml(f)
+                        : f.EndsWith(".xml", StringComparison.Ordinal) || f.EndsWith(".xml.gz", StringComparison.Ordinal))
                     .Order(StringComparer.Ordinal).ToList()
                 : [];
         }

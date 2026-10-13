@@ -67,9 +67,12 @@ public static class DesktopExec
     public static string? ResolveProgram(string? exec, IEnumerable<string> searchPath)
     {
         var program = Split(exec)?[0];
-        if (string.IsNullOrEmpty(program))
-            return null;
+        return string.IsNullOrEmpty(program) ? null : FindProgram(program, searchPath);
+    }
 
+    /// <summary>Finds a program by its absolute path or, for a bare name, in <paramref name="searchPath"/>.</summary>
+    public static string? FindProgram(string program, IEnumerable<string> searchPath)
+    {
         if (Path.IsPathFullyQualified(program))
             return File.Exists(program) ? program : null;
         if (program.Contains('/'))

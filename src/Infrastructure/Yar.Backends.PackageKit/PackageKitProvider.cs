@@ -6,7 +6,7 @@ namespace Yar.Backends.PackageKit;
 /// The distribution's own packages and repositories, through PackageKit. That one interface
 /// covers dnf, apt, zypper and pacman.
 /// </summary>
-public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISourceManager
+public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider
 {
     public const string ProviderId = "packagekit";
 
@@ -19,6 +19,7 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     private readonly IReadOnlyList<IRepoDetailReader> _detailReaders;
     private readonly IReadOnlyList<string> _launcherDirs;
     private readonly ICacheStore? _cache;
+    private readonly IReadOnlyList<IRepoListFallback> _repoFallbacks;
 
     /// <param name="systemApplicationDirs">
     /// Directories whose launchers may belong to a package, e.g. <c>/usr/share/applications</c>.
@@ -28,8 +29,10 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
         IReadOnlyList<IRepoDetailReader> detailReaders,
         IReadOnlyList<string> systemApplicationDirs,
         string? distroHomepage = null,
-        ICacheStore? cache = null)
+        ICacheStore? cache = null,
+        IReadOnlyList<IRepoListFallback>? repoFallbacks = null)
     {
+        _repoFallbacks = repoFallbacks ?? [];
         _cache = cache;
         Facts = new(ProviderId, distroHomepage, RepoConfigDirs.Where(Directory.Exists)
             .Select(d => new ProviderLocation("The list of sources", d)).ToList());
@@ -41,6 +44,15 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     public string Id => ProviderId;
 
     public ProviderFacts Facts { get; }
+
+    public Task<OfferSize?> GetSizeAsync(StoreOffer offer, CancellationToken ct) =>
+        offer.ProviderId == ProviderId && IsPackageName(offer.PackageName)
+            ? _client.GetOfferSizeAsync(offer.PackageName!, ct)
+            : Task.FromResult<OfferSize?>(null);
+
+    // Package names come from catalog files; only plain names are passed on to the daemon.
+    private static bool IsPackageName(string? name) =>
+        name is { Length: > 0 and <= 255 } && name.All(c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.' or '+');
 
     // Repositories that are already configured can be switched on and off. Adding a new one means
     // writing system files as root, which Yar does not do.
@@ -54,7 +66,8 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
     public Task RemoveAsync(SourceInfo source, CancellationToken ct) =>
         throw new NotSupportedException("Package sources cannot be removed from here yet.");
 
-    public bool CanToggle(SourceInfo source) => source.ProviderId == ProviderId && source.Id.Length > 0;
+    public bool CanToggle(SourceInfo source) =>
+        source.ProviderId == ProviderId && source.Id.Length > 0 && !source.Technical.ContainsKey("read-only");
 
     public Task SetEnabledAsync(SourceInfo source, bool enabled, CancellationToken ct) =>
         CanToggle(source)
@@ -105,10 +118,24 @@ public sealed class PackageKitProvider : ISoftwareProvider, IUpdateProvider, ISo
             .GroupBy(pair => pair.Key, StringComparer.Ordinal)
             .ToDictionary(group => group.Key, group => group.First().Value, StringComparer.Ordinal);
 
+        // Some backends report no repositories at all; then the package manager's own files are read instead.
+        var listedElsewhere = false;
+        if (repos.Count == 0)
+        {
+            var found = _repoFallbacks.SelectMany(fallback => fallback.Read()).ToList();
+            repos = found.Select(f => f.Repo).ToList();
+            foreach (var (repo, detail) in found)
+                details.TryAdd(repo.Id, detail with { RepoId = repo.Id });
+            listedElsewhere = repos.Count > 0;
+        }
+
         return repos.Select(repo =>
         {
             details.TryGetValue(repo.Id, out var detail);
             var technical = new Dictionary<string, string> { ["repo-id"] = repo.Id };
+            // PackageKit does not know these, so it cannot switch them either.
+            if (listedElsewhere)
+                technical["read-only"] = "true";
             if (backend is not null)
                 technical["backend"] = backend.Name;
             if (detail is not null)

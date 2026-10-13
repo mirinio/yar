@@ -46,6 +46,12 @@ public sealed record AppInfo(
     /// </summary>
     public string? InstallPath { get; init; }
 
+    /// <summary>
+    /// The folder this app keeps the user's settings and data in. Only set where that is certain;
+    /// for most system packages nobody can say without guessing.
+    /// </summary>
+    public string? DataPath { get; init; }
+
     /// <summary>True for apps no source manages: the user set them up by hand.</summary>
     public bool IsSelfInstalled => ProviderId == "manual";
 }

@@ -70,13 +70,28 @@ public sealed record StoreCollections(
 
 public sealed record InstallStats(long Total, long LastMonth, long LastWeek);
 
+/// <summary>How much an offer takes to download and how much room it needs once installed. Either may be unknown.</summary>
+public sealed record OfferSize(long? DownloadBytes, long? InstalledBytes);
+
+/// <summary>What a store knows about one of its apps before it is installed.</summary>
+public sealed record AppSummary(OfferSize Size, RawPermissions? Permissions);
+
+/// <summary>Optional: a provider that can say how big one of its not-yet-installed apps is.</summary>
+public interface IOfferSizeProvider
+{
+    Task<OfferSize?> GetSizeAsync(StoreOffer offer, CancellationToken ct);
+}
+
+public enum FeedPeriod { Week, Month, Year }
+
 /// <summary>A source-code project developers are currently interested in. Not something Yar installs.</summary>
 public sealed record DevProject(string FullName, string? Description, string? Language, long Stars, string Url);
 
 public interface IDeveloperFeed
 {
     /// <summary>New projects with the most interest, for the given programming languages.</summary>
-    Task<IReadOnlyList<DevProject>> GetTrendingAsync(IReadOnlyList<string> languages, CancellationToken ct);
+    Task<IReadOnlyList<DevProject>> GetTrendingAsync(
+        IReadOnlyList<string> languages, FeedPeriod period, CancellationToken ct);
 }
 
 /// <summary>How people rated an app: counts for one to five stars.</summary>
@@ -101,6 +116,9 @@ public interface IOnlineStoreData
 
     /// <summary>How often an app was installed, or null when the service has no numbers for it.</summary>
     Task<InstallStats?> GetInstallStatsAsync(string appId, CancellationToken ct);
+
+    /// <summary>Sizes and permissions of an app as the store lists it, or null when the store does not carry it.</summary>
+    Task<AppSummary?> GetAppSummaryAsync(string appId, CancellationToken ct);
 
     /// <summary>The bytes of a picture. Only addresses <see cref="ScreenshotUrls.IsAllowed"/> accepts are fetched.</summary>
     Task<byte[]?> GetImageAsync(string url, CancellationToken ct);

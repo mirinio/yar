@@ -17,6 +17,9 @@ internal sealed class MainWindow
     private readonly AppsPage _apps = new();
     private readonly SourcesPage _sources = new();
     private readonly StorePage _store = new();
+    private readonly OpenSourcePage _openSource = new();
+    private readonly Adw.NavigationSplitView _split = Adw.NavigationSplitView.New();
+    private readonly Gtk.ListBox _sidebar = Gtk.ListBox.New();
     private readonly UpdatesPage _updates = new();
     private readonly Section[] _sections;
 
@@ -44,6 +47,7 @@ internal sealed class MainWindow
             CreateSection("store", T._("Store"), "system-software-install-symbolic", _store.Widget),
             CreateSection("sources", T._("Sources"), "folder-download-symbolic", _sources.Widget),
             CreateSection("updates", T._("Updates"), "software-update-available-symbolic", _updates.Widget),
+            CreateSection("opensource", T._("Open Source"), "applications-development-symbolic", _openSource.Widget),
         ];
         foreach (var section in _sections)
             _sectionStack.AddNamed(section.Navigation, section.Name);
@@ -55,10 +59,15 @@ internal sealed class MainWindow
         _mode.AddNamed(_sectionStack, "main");
         _toasts.Child = _mode;
 
-        var split = Adw.NavigationSplitView.New();
-        split.Sidebar = Adw.NavigationPage.New(CreateSidebar(), "Yar");
-        split.Content = Adw.NavigationPage.New(_toasts, "Yar");
-        _window.Content = split;
+        _split.Sidebar = Adw.NavigationPage.New(CreateSidebar(), "Yar");
+        _split.Content = Adw.NavigationPage.New(_toasts, "Yar");
+        _window.Content = _split;
+
+        // On a narrow window the sidebar folds away and the content takes the whole width;
+        // libadwaita then puts a back button in the header that leads to the sidebar.
+        var narrow = Adw.Breakpoint.New(Adw.BreakpointCondition.Parse("max-width: 720sp"));
+        narrow.AddSetter(_split, "collapsed", new GObject.Value(true));
+        _window.AddBreakpoint(narrow);
 
         StartUp();
     }
@@ -77,7 +86,7 @@ internal sealed class MainWindow
 
     private Adw.ToolbarView CreateSidebar()
     {
-        var list = Gtk.ListBox.New();
+        var list = _sidebar;
         list.AddCssClass("navigation-sidebar");
         foreach (var section in _sections)
         {
@@ -104,6 +113,7 @@ internal sealed class MainWindow
             // Choosing a section in the sidebar always lands on its first page.
             _sections[_section].Navigation.PopToPage(_sections[_section].Root);
             _sectionStack.VisibleChildName = _sections[_section].Name;
+            _split.ShowContent = true;
         };
         list.SelectRow(list.GetRowAtIndex(0));
 
@@ -267,6 +277,16 @@ internal sealed class MainWindow
         _store.Show(ui);
         _sources.Show(ui);
         _updates.Show(ui);
+        _openSource.Show(ui);
+
+        // The Open Source tab is only in the sidebar while it is switched on in the settings.
+        var openSourceIndex = Array.FindIndex(_sections, section => section.Name == "opensource");
+        if (_sidebar.GetRowAtIndex(openSourceIndex) is { } openSourceRow)
+        {
+            openSourceRow.Visible = ui.OpenSourceEnabled;
+            if (!ui.OpenSourceEnabled && _section == openSourceIndex)
+                _sidebar.SelectRow(_sidebar.GetRowAtIndex(0));
+        }
 
         _updateCount.SetText(_snapshot.Updates.Count.ToString(System.Globalization.CultureInfo.CurrentCulture));
         _updateCount.Visible = _snapshot.Updates.Count > 0;

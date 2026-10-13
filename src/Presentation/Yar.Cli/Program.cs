@@ -7,7 +7,7 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
     return 2;
@@ -43,6 +43,32 @@ if (command is "source-add" or "source-remove")
         await manager.RemoveAsync(source, CancellationToken.None);
         Console.WriteLine($"removed {source.Id}");
     }
+    return 0;
+}
+
+// yar-apps permissions <words>: what an installed app is allowed to reach, as the app page will say it.
+if (command == "permissions")
+{
+    var wanted = string.Join(' ', args.Where(a => !a.StartsWith('-')).Skip(1));
+    var installed = await host.Catalog.LoadAppsAsync(CancellationToken.None);
+    var app = installed.Apps.FirstOrDefault(a => a.Name.Contains(wanted, StringComparison.OrdinalIgnoreCase));
+    if (app is null)
+    {
+        Console.Error.WriteLine("No installed app with that name.");
+        return 1;
+    }
+    var raw = host.Ability<Yar.Core.IPermissionProvider>(app.ProviderId) is { } permissions
+        ? await permissions.GetPermissionsAsync(app, CancellationToken.None)
+        : null;
+    if (raw is null)
+    {
+        Console.WriteLine($"{app.Name} ({app.ProviderId}) is not kept apart: it can do whatever you can.");
+        return 0;
+    }
+    var report = Yar.Core.FlatpakPermissions.Describe(raw);
+    Console.WriteLine($"{app.Name}: {report.Verdict}");
+    foreach (var note in report.Notes)
+        Console.WriteLine($"  {note.Weight,-6} {note.Text}{(note.Detail is null ? "" : $" ({note.Detail})")}");
     return 0;
 }
 
@@ -95,6 +121,7 @@ if (json)
         "apps" => snapshot.Apps,
         "unclaimed" => snapshot.UnclaimedLaunchers.Select(e => e.Path),
         "updates" => snapshot.Updates,
+        "attention" => Yar.Core.AttentionFinder.Find(snapshot),
         _ => snapshot.Providers,
     };
     Console.WriteLine(JsonSerializer.Serialize(payload, options));
@@ -126,6 +153,10 @@ switch (command)
             string.Join(", ", snapshot.Updates.GroupBy(u => u.Severity).Select(g => $"{g.Count()} {g.Key}")));
         foreach (var report in snapshot.Providers.Where(r => r.UpdateCheckError is not null))
             Console.WriteLine($"{report.ProviderId}: update check failed: {report.UpdateCheckError}");
+        break;
+    case "attention":
+        foreach (var item in Yar.Core.AttentionFinder.Find(snapshot))
+            Console.WriteLine($"{item.Kind,-15} {item.Title,-44} {(item.SizeBytes is { } bytes ? bytes.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-"),12}  {item.Path}");
         break;
     case "unclaimed":
         foreach (var entry in snapshot.UnclaimedLaunchers)

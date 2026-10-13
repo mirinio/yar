@@ -1,3 +1,5 @@
+using Yar.Core;
+
 namespace Yar.Backends.PackageKit;
 
 public sealed record PkBackend(string Name, string DistroId);
@@ -61,6 +63,12 @@ public interface IPackageKitClient
 
     /// <summary>How long ago the list of available packages was refreshed; null if never or unknown.</summary>
     Task<TimeSpan?> GetTimeSinceRefreshAsync(CancellationToken ct);
+
+    /// <summary>
+    /// Download and installed size of the newest version of a package that is on offer, whether or
+    /// not it is installed. Null when no source offers a package of that name.
+    /// </summary>
+    Task<OfferSize?> GetOfferSizeAsync(string packageName, CancellationToken ct);
 
     /// <summary>Installed size in bytes per package ID. Packages the backend skips are absent.</summary>
     Task<IReadOnlyDictionary<string, long>> GetSizesAsync(IReadOnlyList<string> packageIds, CancellationToken ct);

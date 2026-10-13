@@ -23,6 +23,9 @@ public sealed record CatalogSnapshot(
     IReadOnlyList<UpdateInfo> Updates,
     IReadOnlyList<ProviderFacts> Facts)
 {
+    /// <summary>Data left behind by apps that are no longer installed.</summary>
+    public IReadOnlyList<LeftoverData> Leftovers { get; init; } = [];
+
     /// <summary>How long each stage of the load took. For diagnosis; not part of what the user sees.</summary>
     public IReadOnlyList<StageTiming> Timings { get; init; } = [];
 }
@@ -134,10 +137,19 @@ public sealed class AppCatalog
         var reports = apps.Providers.ToArray();
         var updates = await CollectUpdatesAsync(reports, apps.Apps, timings, ct).ConfigureAwait(false);
 
+        var leftovers = await Task.WhenAll(_providers.Select((provider, i) =>
+            provider is ILeftoverProvider finder && IsAvailable(reports[i])
+                ? timings.Measure($"leftovers:{provider.Id}", () => Guarded<IReadOnlyList<LeftoverData>>(
+                    () => finder.FindLeftoversAsync(apps.Apps.Where(a => a.ProviderId == provider.Id).ToList(), ct),
+                    // Not being able to look for leftovers is no reason to trouble the user.
+                    _ => [], ct))
+                : Task.FromResult<IReadOnlyList<LeftoverData>>([]))).ConfigureAwait(false);
+
         var complete = apps with
         {
             Providers = reports,
             Updates = updates,
+            Leftovers = leftovers.SelectMany(found => found).ToList(),
             Timings = [.. apps.Timings, .. timings.ToList()],
         };
         if (_cache is not null)

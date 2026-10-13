@@ -44,6 +44,19 @@ public class AnnotationTests
     }
 
     [Fact]
+    public void Ubuntu_sources_are_told_apart_by_who_looks_after_them()
+    {
+        var known = KnownSources.LoadBundled("ubuntu");
+
+        Assert.Equal(TrustLevel.Distro, known.Describe(Source("packagekit", "ubuntu-noble-updates-main")).Trust);
+        Assert.Equal(TrustLevel.WellKnown, known.Describe(Source("packagekit", "ubuntu-noble-universe")).Trust);
+        Assert.Equal(TrustLevel.WellKnown, known.Describe(Source("packagekit", "ubuntu-noble-security-multiverse")).Trust);
+        Assert.Equal(TrustLevel.Unknown, known.Describe(Source("packagekit", "lp-ppa-someone-noble-main")).Trust);
+        // On Fedora a repository that happens to be called this is not Ubuntu's.
+        Assert.Equal(TrustLevel.Unknown, KnownSources.LoadBundled("fedora").Describe(Source("packagekit", "ubuntu-noble-main")).Trust);
+    }
+
+    [Fact]
     public void Unlisted_sources_stay_unknown()
     {
         var known = KnownSources.LoadBundled("fedora");
@@ -61,6 +74,30 @@ public class AnnotationTests
 
         Assert.Equal(TrustLevel.Unknown, KnownSources.LoadBundled("opensuse-tumbleweed").Describe(updates).Trust);
         Assert.Equal(TrustLevel.Unknown, KnownSources.LoadBundled(null).Describe(updates).Trust);
+    }
+
+    [Fact]
+    public async Task The_main_app_of_a_package_wins_over_its_helpers()
+    {
+        var components = new ComponentIndex();
+        components.Add([
+            new("org.xfce.mousepad-settings", "Text Editor Settings", "Configure Mousepad", "mousepad", ["org.xfce.mousepad-settings.desktop"]),
+            new("org.xfce.mousepad", "Mousepad", "Simple text editor", "mousepad", ["org.xfce.mousepad.desktop"]),
+        ]);
+        var annotator = new CatalogAnnotator(KnownSources.Parse("[]", null), () => components, []);
+        var index = new DesktopEntryIndex(
+        [
+            Launcher("/a/org.xfce.mousepad-settings.desktop", "settings"),
+            Launcher("/a/org.xfce.mousepad.desktop", "mousepad"),
+        ]);
+        // The provider happened to list the helper first.
+        AppInfo[] apps = [App("packagekit", "x", ["/a/org.xfce.mousepad-settings.desktop", "/a/org.xfce.mousepad.desktop"], "mousepad")];
+
+        var (_, annotated) = await annotator.AnnotateAsync([], apps, index, Token);
+
+        Assert.Equal("Mousepad", annotated[0].Name);
+        Assert.Equal("mousepad", annotated[0].IconName);
+        Assert.Equal("/a/org.xfce.mousepad.desktop", annotated[0].PrimaryLauncherPath);
     }
 
     [Fact]

@@ -24,9 +24,10 @@ internal sealed class Ui(
     /// <summary>False when the user switched off ratings, reviews and popular lists from the internet.</summary>
     public bool OnlineAllowed => settings.UseOnlineData;
 
-    /// <summary>The languages to show trending projects for; empty when the developer section is off.</summary>
-    public IReadOnlyList<string> DeveloperLanguages =>
-        settings is { UseOnlineData: true, ShowDeveloperProjects: true, DeveloperLanguages: { } languages } ? languages : [];
+    /// <summary>True when the Open Source tab is switched on and allowed to fetch.</summary>
+    public bool OpenSourceEnabled => settings is { UseOnlineData: true, ShowDeveloperProjects: true };
+
+    public Settings Settings => settings;
 
     public void Toast(string text) => toast(text);
 

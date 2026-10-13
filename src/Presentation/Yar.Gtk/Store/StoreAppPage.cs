@@ -59,7 +59,9 @@ internal static class StoreAppPage
             page.Add(have);
         }
 
-        page.Add(CreateOffers(ui, app));
+        var offerRows = new Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)>();
+        page.Add(CreateOffers(ui, app, offerRows));
+        page.Add(CreateReach(ui, app, offerRows));
 
         if (app.Description is not null)
         {
@@ -109,7 +111,8 @@ internal static class StoreAppPage
         }
     }
 
-    private static Adw.PreferencesGroup CreateOffers(Ui ui, StoreApp app)
+    private static Adw.PreferencesGroup CreateOffers(
+        Ui ui, StoreApp app, Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)> offerRows)
     {
         var suggested = StoreCatalog.Suggest(app, ui.Presentation.TrustOf);
         var group = Widgets.Group(
@@ -162,6 +165,7 @@ internal static class StoreAppPage
                 : Widgets.Navigation(title, string.Join("\n", notes), () => ui.ShowSource(source), [.. rowTags]);
             row.SubtitleLines = 0;
             group.Add(row);
+            offerRows[offer] = (row, string.Join("\n", notes));
         }
 
         var later = Adw.ActionRow.New();
@@ -175,6 +179,72 @@ internal static class StoreAppPage
         later.AddSuffix(open);
         group.Add(later);
         return group;
+    }
+
+    // "What it can reach", and the sizes on the offer rows. Both arrive after the page is shown.
+    private static Adw.PreferencesGroup CreateReach(
+        Ui ui, StoreApp app, Dictionary<StoreOffer, (Adw.ActionRow Row, string Notes)> offerRows)
+    {
+        var flatpak = app.Offers.FirstOrDefault(offer => offer.ProviderId == "flatpak");
+        var group = Widgets.PermissionsGroup(null, ui.Technical);
+        if (flatpak is not null)
+        {
+            group.Description = Widgets.Escape(ui.OnlineAllowed
+                ? T._("Looking up what the Flatpak version may reach…")
+                : T._("For the Flatpak version I look this up on flathub.org, which is switched off in the settings."));
+        }
+
+        foreach (var (offer, (row, notes)) in offerRows)
+            _ = FillOffer(ui, app, offer, row, notes, offer == flatpak ? group : null);
+        return group;
+    }
+
+    private static async Task FillOffer(
+        Ui ui, StoreApp app, StoreOffer offer, Adw.ActionRow row, string notes, Adw.PreferencesGroup? reach)
+    {
+        OfferSize? size = null;
+        try
+        {
+            if (offer.ProviderId == "flatpak" && ui.OnlineAllowed)
+            {
+                var summary = await ui.Host.Online.GetAppSummaryAsync(offer.ComponentId, CancellationToken.None);
+                size = summary?.Size;
+                if (reach is not null)
+                {
+                    if (summary?.Permissions is { } raw)
+                    {
+                        var report = FlatpakPermissions.Describe(raw);
+                        var prefix = app.Offers.Count > 1 ? T._("As a Flatpak: ") : "";
+                        reach.Description = Widgets.Escape(prefix + Widgets.PermissionVerdict(report.Verdict));
+                        Widgets.AddPermissionRows(reach, report, ui.Technical);
+                        if (report.Verdict == PermissionWeight.Broad)
+                            row.AddSuffix(Widgets.Tag(T._("Broad access"), attention: true));
+                    }
+                    else
+                    {
+                        reach.Description = Widgets.Escape(T._("I couldn't find out what the Flatpak version may reach."));
+                    }
+                }
+            }
+            else if (ui.Host.Ability<IOfferSizeProvider>(offer.ProviderId) is { } sizes)
+            {
+                size = await sizes.GetSizeAsync(offer, CancellationToken.None);
+            }
+        }
+        // Sizes and permissions are extras from other services; whatever goes wrong there, the page stays usable.
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            if (reach is not null)
+                reach.Description = Widgets.Escape(T._("I couldn't find out what the Flatpak version may reach."));
+        }
+
+        var parts = new List<string>();
+        if (size?.DownloadBytes is { } download)
+            parts.Add(T.F("{0} to download", Presentation.FormatSize(download)));
+        if (size?.InstalledBytes is { } installed)
+            parts.Add(T.F("{0} once installed", Presentation.FormatSize(installed)));
+        if (parts.Count > 0)
+            row.Subtitle = $"{notes}\n{string.Join(" · ", parts)}";
     }
 
     private static Adw.PreferencesGroup CreateReviews(Ui ui, StoreApp app)

@@ -94,11 +94,17 @@ public sealed class KnownSources
         return true;
     }
 
-    // A single "*" at the start or end of the pattern; everything else must match exactly.
-    private static bool Glob(string pattern, string value) =>
-        pattern.StartsWith('*') ? value.EndsWith(pattern[1..], StringComparison.Ordinal)
-        : pattern.EndsWith('*') ? value.StartsWith(pattern[..^1], StringComparison.Ordinal)
-        : pattern == value;
+    // A single "*" stands for any run of characters; everything else must match exactly.
+    private static bool Glob(string pattern, string value)
+    {
+        var star = pattern.IndexOf('*');
+        if (star < 0)
+            return pattern == value;
+        var prefix = pattern[..star];
+        var suffix = pattern[(star + 1)..];
+        return value.Length >= prefix.Length + suffix.Length &&
+            value.StartsWith(prefix, StringComparison.Ordinal) && value.EndsWith(suffix, StringComparison.Ordinal);
+    }
 
     private static string? HostOf(string? url)
     {

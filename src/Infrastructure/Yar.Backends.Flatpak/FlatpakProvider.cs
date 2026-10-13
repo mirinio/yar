@@ -3,7 +3,8 @@ using Yar.Core;
 namespace Yar.Backends.Flatpak;
 
 /// <summary>Flatpak remotes and installed Flatpak apps, read through the <c>flatpak</c> command.</summary>
-public sealed class FlatpakProvider : ISoftwareProvider, IUpdateProvider, ISourceManager
+public sealed class FlatpakProvider
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IPermissionProvider, ILeftoverProvider
 {
     public const string ProviderId = "flatpak";
 
@@ -28,13 +29,15 @@ public sealed class FlatpakProvider : ISoftwareProvider, IUpdateProvider, ISourc
     private readonly string? _flatpak;
     private readonly string _userInstallationDir;
     private readonly string _systemInstallationDir;
+    private readonly string? _appDataDir;
 
     /// <param name="userInstallationDir">Usually <c>$XDG_DATA_HOME/flatpak</c>.</param>
     /// <param name="flatpakPath">Absolute path of the flatpak command; located automatically when null.</param>
     public FlatpakProvider(
         IProcessRunner runner, string userInstallationDir, string? flatpakPath = null,
-        string systemInstallationDir = "/var/lib/flatpak")
+        string systemInstallationDir = "/var/lib/flatpak", string? appDataDir = null)
     {
+        _appDataDir = appDataDir;
         _systemInstallationDir = systemInstallationDir.TrimEnd('/') + "/";
         _runner = runner;
         _userInstallationDir = userInstallationDir.TrimEnd('/') + "/";
@@ -42,6 +45,50 @@ public sealed class FlatpakProvider : ISoftwareProvider, IUpdateProvider, ISourc
     }
 
     public string Id => ProviderId;
+
+    public async Task<RawPermissions?> GetPermissionsAsync(AppInfo app, CancellationToken ct)
+    {
+        if (_flatpak is null || app.ProviderId != ProviderId ||
+            !app.Technical.TryGetValue("ref", out var reference) || !IsRef(reference) ||
+            !app.Technical.TryGetValue("installation", out var installation))
+        {
+            return null;
+        }
+
+        var output = await RunAsync(
+            ["info", "--show-permissions", installation == "user" ? "--user" : "--system", reference], ct)
+            .ConfigureAwait(false);
+        return FlatpakOutput.ParsePermissions(output);
+    }
+
+    /// <summary>
+    /// Folders in the per-user app data directory that belong to no installed Flatpak. Flatpak keeps an
+    /// app's settings there and leaves them behind when the app is removed.
+    /// </summary>
+    public Task<IReadOnlyList<LeftoverData>> FindLeftoversAsync(IReadOnlyList<AppInfo> installed, CancellationToken ct) =>
+        Task.Run<IReadOnlyList<LeftoverData>>(() =>
+        {
+            if (_appDataDir is null || !Directory.Exists(_appDataDir))
+                return [];
+
+            var installedIds = installed.Select(app => app.ComponentId).Where(id => id is not null)
+                .ToHashSet(StringComparer.Ordinal);
+            var leftovers = new List<LeftoverData>();
+            foreach (var directory in Directory.EnumerateDirectories(_appDataDir).Order(StringComparer.Ordinal))
+            {
+                ct.ThrowIfCancellationRequested();
+                var info = new DirectoryInfo(directory);
+                // A link could point anywhere; only real folders count as app data.
+                if (info.LinkTarget is not null || installedIds.Contains(info.Name))
+                    continue;
+                leftovers.Add(new(ProviderId, info.Name, directory, FolderSize.Measure(directory, ct)));
+            }
+            return leftovers;
+        }, ct);
+
+    private static bool IsRef(string reference) =>
+        reference.Length is > 0 and <= 512 && !reference.StartsWith('-') &&
+        reference.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or '-' or '/');
 
     // Sources are only ever added for the current user. That needs no password and cannot affect
     // other people using this computer.
@@ -229,6 +276,8 @@ public sealed class FlatpakProvider : ISoftwareProvider, IUpdateProvider, ISourc
             })
         {
             InstallPath = Directory.Exists(files) ? files : null,
+            DataPath = _appDataDir is not null && Path.Combine(_appDataDir, app.Application) is var data &&
+                Directory.Exists(data) ? data : null,
         };
     }
 
