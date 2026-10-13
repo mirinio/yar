@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.example.Yar</id>
+  <name>Yar</name>
+  <summary>Your friend for apps on Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      Yar (the Persian word for "friend") shows everything installed on your computer in one
+      place, whether it came from your distribution, from Flathub, from the Snap Store or from
+      a file you downloaded yourself, and explains it in plain language.
+    </p>
+    <ul>
+      <li>See every app, where it came from, where it lives and what it may reach</li>
+      <li>Browse a store that lists each app once, however many sources offer it</li>
+      <li>Understand, add and switch the sources your apps come from</li>
+      <li>See which updates are waiting and where your disk space goes</li>
+    </ul>
+    <p>
+      Yar is in early development. It does not install or remove apps yet.
+    </p>
+  </description>
+  <launchable type="desktop-id">org.example.Yar.desktop</launchable>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+  <content_rating type="oars-1.1" />
+</component>

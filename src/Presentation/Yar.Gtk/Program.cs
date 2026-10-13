@@ -4,12 +4,15 @@ using Yar.Hosting;
 using var host = new YarHost();
 
 // KDE and others write "prefer dark theme" into GTK's settings file. libadwaita takes light or
-// dark from the desktop itself and prints a warning when it finds that old setting switched on,
-// so it is cleared for this run before libadwaita starts. The settings file is not touched.
-Adw.Module.Initialize();
+// dark from the desktop itself and prints a warning when it finds that old setting switched on.
+// GTK is therefore started first, on its own, and the setting cleared for this run before
+// libadwaita is loaded at all. The settings file is not touched.
+Gtk.Module.Initialize();
 Gtk.Functions.Init();
 if (Gtk.Settings.GetDefault() is { GtkApplicationPreferDarkTheme: true } gtkSettings)
     gtkSettings.GtkApplicationPreferDarkTheme = false;
+Adw.Module.Initialize();
+
 var application = Adw.Application.New(YarHost.AppId, Gio.ApplicationFlags.DefaultFlags);
 application.OnActivate += (sender, _) =>
 {
@@ -22,4 +25,6 @@ application.OnActivate += (sender, _) =>
     }
     new MainWindow(app, host).Present();
 };
-return application.RunWithSynchronizationContext(args);
+// GLib expects the program's own name first, as in C. Without it, the first real argument is taken
+// for the name and options such as --help are never seen.
+return application.RunWithSynchronizationContext(["yar", .. args]);

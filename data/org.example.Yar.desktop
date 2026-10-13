@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Yar
+GenericName=App Manager
+Comment=See and look after every app on your computer, wherever it came from
+Exec=yar
+Icon=org.example.Yar
+Terminal=false
+Categories=System;PackageManager;
+Keywords=apps;software;install;flatpak;packages;store;sources;storage;
+StartupNotify=true

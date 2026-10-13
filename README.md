@@ -44,6 +44,10 @@ dotnet run --project src/Presentation/Yar.Cli -- status --timings   # how long e
 
 `scripts/publish.sh` builds a self-contained tarball that runs without .NET installed.
 
+`scripts/install-local.sh` puts Yar into your app menu, for your user only and without a
+password: the program under `~/.local/opt/yar`, a `yar` command, a menu entry and an icon.
+`scripts/uninstall-local.sh` removes exactly those again.
+
 ### Testing things that change a system
 
 Installing and removing software should not be tried out on a computer someone uses.

@@ -40,6 +40,8 @@ internal sealed class MainWindow
 
         _window = Adw.ApplicationWindow.New(application);
         _window.Title = "Yar";
+        // The icon installed with the menu entry; the desktop also matches the window to that entry by this ID.
+        _window.IconName = YarHost.AppId;
         _window.SetDefaultSize(1040, 720);
 
         _sections =

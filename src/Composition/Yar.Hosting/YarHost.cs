@@ -13,7 +13,7 @@ namespace Yar.Hosting;
 public sealed class YarHost : IDisposable
 {
     /// <summary>Placeholder until the project has its real reverse-DNS ID.</summary>
-    public const string AppId = "org.example.Yar";
+    public const string AppId = AppIdentity.Id;
 
     private readonly SnapProvider _snap;
     private readonly PackageKitClient _packageKit = new();
