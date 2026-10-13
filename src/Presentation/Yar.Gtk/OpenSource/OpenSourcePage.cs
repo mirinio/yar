@@ -18,6 +18,7 @@ internal sealed class OpenSourcePage
 
     private Ui? _ui;
     private bool _built;
+    private string _languagesKey = "";
     private int _request;
 
     public OpenSourcePage()
@@ -77,9 +78,13 @@ internal sealed class OpenSourcePage
             return;
         }
 
-        if (!_built)
+        // Languages can also be ticked in the settings; the buttons here must show the same.
+        var languagesKey = string.Join(',', ui.Settings.DeveloperLanguages ?? []);
+        if (!_built || languagesKey != _languagesKey)
         {
             _built = true;
+            _languagesKey = languagesKey;
+            _languages.RemoveAll();
             var chosen = ui.Settings.DeveloperLanguages ?? [];
             foreach (var (name, _) in DevLanguages.All)
             {
@@ -93,6 +98,7 @@ internal sealed class OpenSourcePage
                         languages.Add(name);
                     ui.Settings.DeveloperLanguages = languages;
                     ui.Settings.Save();
+                    _languagesKey = string.Join(',', languages);
                     Load();
                 };
                 _languages.Append(toggle);
@@ -127,7 +133,7 @@ internal sealed class OpenSourcePage
         {
             projects = await ui.Host.Developer.GetTrendingAsync(languages, period, CancellationToken.None);
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
             projects = [];
         }

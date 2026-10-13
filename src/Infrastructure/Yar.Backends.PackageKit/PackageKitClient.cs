@@ -17,6 +17,12 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     // PK_ROLE_ENUM_REFRESH_CACHE in pk-enum.h.
     private const uint RoleRefreshCache = 13;
 
+    // A question that gets no answer in this time is given up, so a stuck daemon cannot stall Yar for good.
+    private static readonly TimeSpan QueryTimeout = TimeSpan.FromSeconds(90);
+
+    // A change waits for the user to type their password.
+    private static readonly TimeSpan PromptTimeout = TimeSpan.FromMinutes(5);
+
     // PK_EXIT_ENUM_SUCCESS in pk-enum.h.
     private const uint ExitSuccess = 1;
 
@@ -71,7 +77,7 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
                 await transaction.SetHintsAsync(["interactive=true"]).ConfigureAwait(false);
                 await transaction.RepoEnableAsync(repoId, enabled).ConfigureAwait(false);
             },
-            ct);
+            ct, PromptTimeout);
 
     public Task<IReadOnlyList<PkPackage>> GetUpdatesAsync(CancellationToken ct) =>
         CollectPackagesAsync(transaction => transaction.GetUpdatesAsync(FilterNone), ct);
@@ -204,6 +210,23 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     /// Runs one PackageKit transaction: subscribe to its result signals, start it, wait until it finishes.
     /// </summary>
     private async Task RunAsync(
+        Func<Transaction, Task<IDisposable[]>> subscribe, Func<Transaction, Task> start, CancellationToken caller,
+        TimeSpan? timeout = null)
+    {
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(caller);
+        limit.CancelAfter(timeout ?? QueryTimeout);
+        var ct = limit.Token;
+        try
+        {
+            await RunWithinAsync(subscribe, start, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!caller.IsCancellationRequested)
+        {
+            throw new TimeoutException("PackageKit did not answer in time.");
+        }
+    }
+
+    private async Task RunWithinAsync(
         Func<Transaction, Task<IDisposable[]>> subscribe, Func<Transaction, Task> start, CancellationToken ct)
     {
         var service = await ConnectAsync(DBusAddress.System, ct).ConfigureAwait(false);
@@ -248,6 +271,31 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
         }
     }
 
+    private void Forget(DBusConnection lost)
+    {
+        try
+        {
+            _connectLock.Wait();
+            try
+            {
+                if (ReferenceEquals(_connection, lost))
+                {
+                    _connection = null;
+                    _service = null;
+                }
+            }
+            finally
+            {
+                _connectLock.Release();
+            }
+            lost.Dispose();
+        }
+        catch (ObjectDisposedException)
+        {
+            // Yar is closing; there is nothing left to forget.
+        }
+    }
+
     private async Task<DBusService> ConnectAsync(string? address, CancellationToken ct)
     {
         if (address is null)
@@ -272,6 +320,9 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
             _connection = connection;
             var service = new DBusService(connection, ServiceName);
             _service = service;
+            // If the bus connection is lost, forget it so that the next question connects afresh.
+            _ = connection.DisconnectedAsync().ContinueWith(
+                _ => Forget(connection), CancellationToken.None, TaskContinuationOptions.None, TaskScheduler.Default);
             return service;
         }
         finally

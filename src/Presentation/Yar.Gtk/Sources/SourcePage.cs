@@ -116,7 +116,7 @@ internal static class SourcePage
             ui.Toast(T.F("I've removed {0}.", source.Name));
             ui.Refresh();
         }
-        catch (Exception e) when (e is InvalidOperationException or TimeoutException or IOException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
             button.Sensitive = true;
             ui.Toast(T.F("Hmm, I couldn't remove it: {0}", AddSourcePages.Short(e.Message)));

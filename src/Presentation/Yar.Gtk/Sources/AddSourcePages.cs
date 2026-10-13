@@ -147,7 +147,7 @@ internal static class AddSourcePages
             ui.Toast(T.F("I've added {0}. Its apps will appear in the Store shortly.", displayName));
             ui.Refresh();
         }
-        catch (Exception e) when (e is InvalidOperationException or ArgumentException or TimeoutException or IOException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
             button.Sensitive = true;
             ui.Toast(T.F("Hmm, I couldn't add it: {0}", Short(e.Message)));

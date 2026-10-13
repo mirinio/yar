@@ -132,7 +132,8 @@ internal static class AppDetailsPage
             if (await provider.GetPermissionsAsync(app, CancellationToken.None) is { } raw)
                 page.Add(Widgets.PermissionsGroup(FlatpakPermissions.Describe(raw), ui.Technical));
         }
-        catch (Exception e) when (e is InvalidOperationException or TimeoutException or IOException)
+        // Permissions are an extra on this page; whatever goes wrong looking them up, the page stays.
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
         }
     }

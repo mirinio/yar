@@ -152,7 +152,9 @@ public sealed class AppCatalog
             Leftovers = leftovers.SelectMany(found => found).ToList(),
             Timings = [.. apps.Timings, .. timings.ToList()],
         };
-        if (_cache is not null)
+        // A load during which a provider failed is shown, with a warning, but not saved: the next
+        // start should open on the last complete picture, not on one with apps missing.
+        if (_cache is not null && reports.All(r => r.Status.Availability != ProviderAvailability.Error))
             SnapshotCache.Write(_cache, complete);
         return complete;
     }

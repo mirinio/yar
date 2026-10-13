@@ -19,8 +19,10 @@ internal static class AppLauncher
             }
 
             // Field codes such as %U stand for files to open; started from here there are none.
+            // "%%" is how an entry writes a real percent sign.
             var arguments = DesktopExec.Split(entry?.Exec)?
-                .Where(argument => !(argument.Length == 2 && argument[0] == '%'))
+                .Where(argument => !(argument.Length == 2 && argument[0] == '%' && argument[1] != '%'))
+                .Select(argument => argument.Replace("%%", "%", StringComparison.Ordinal))
                 .ToList();
             if (arguments is not { Count: > 0 } ||
                 DesktopExec.FindProgram(arguments[0], ui.Host.SearchPath) is not { } program)
@@ -30,7 +32,10 @@ internal static class AppLauncher
             }
 
             // No shell in between: the program and each argument are passed on exactly as written.
-            var info = new ProcessStartInfo(program) { UseShellExecute = false };
+            // Apps expect to start in the folder their entry names, or else in the home folder,
+            // not in whatever folder Yar itself was started from.
+            var folder = entry?.GetKey("Path") is { Length: > 0 } path && Directory.Exists(path) ? path : ui.Host.Dirs.Home;
+            var info = new ProcessStartInfo(program) { UseShellExecute = false, WorkingDirectory = folder };
             foreach (var argument in arguments.Skip(1))
                 info.ArgumentList.Add(argument);
             using var process = Process.Start(info);

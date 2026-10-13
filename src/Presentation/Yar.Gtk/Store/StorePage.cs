@@ -23,6 +23,7 @@ internal sealed class StorePage
     private AppCategory? _category;
     private bool _loading;
     private bool _onlineRequested;
+    private bool _reloadWanted;
     private string _sourcesKey = "";
     private string _onlineKey = "";
 
@@ -91,8 +92,14 @@ internal sealed class StorePage
     // async void: started from the page itself; every failure ends up on screen.
     private async void Load()
     {
-        if (_loading || _ui is null)
+        if (_ui is null)
             return;
+        if (_loading)
+        {
+            // Sources changed again while the catalogs were being read: read them once more afterwards.
+            _reloadWanted = true;
+            return;
+        }
         _loading = true;
         if (_data is null)
             ShowStatus(T._("Reading the app catalogs…"), null, "system-search-symbolic");
@@ -117,6 +124,12 @@ internal sealed class StorePage
             _loading = false;
         }
 
+        if (_reloadWanted)
+        {
+            _reloadWanted = false;
+            Load();
+            return;
+        }
         LoadOnline();
         Fill();
     }
@@ -127,21 +140,33 @@ internal sealed class StorePage
         if (_onlineRequested || _data is null || _ui is not { OnlineAllowed: true } ui)
             return;
         _onlineRequested = true;
-        var data = _data;
 
-        await Quietly(async () => data.Collections = await ui.Host.Online.GetCollectionsAsync(CancellationToken.None));
-        await Quietly(async () => data.Ratings = await ui.Host.Online.GetRatingsAsync(CancellationToken.None));
+        // Both are asked for together and the page is redrawn once, so the banner does not jump
+        // back to its first card twice while someone is already looking at it.
+        var collections = Quietly(() => ui.Host.Online.GetCollectionsAsync(CancellationToken.None));
+        var ratings = Quietly(() => ui.Host.Online.GetRatingsAsync(CancellationToken.None));
+        var (lists, stars) = (await collections, await ratings);
+
+        // The catalogs may have been read again in the meantime; the answers belong to whatever is shown now.
+        if (_data is not { } data || _ui is not { OnlineAllowed: true })
+            return;
+        if (lists is not null)
+            data.Collections = lists;
+        if (stars is not null)
+            data.Ratings = stars;
+        Fill();
     }
 
-    private async Task Quietly(Func<Task> fetch)
+    private static async Task<T?> Quietly<T>(Func<Task<T>> fetch)
+        where T : class
     {
         try
         {
-            await fetch();
-            Fill();
+            return await fetch();
         }
-        catch (Exception e) when (e is HttpRequestException or TaskCanceledException or InvalidDataException or System.Text.Json.JsonException)
+        catch (Exception e) when (e is not OutOfMemoryException)
         {
+            return null;
         }
     }
 

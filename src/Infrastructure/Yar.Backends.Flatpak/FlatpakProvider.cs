@@ -164,12 +164,26 @@ public sealed class FlatpakProvider
             from installation in Installations
             from kind in RefKinds
             select (installation, kind);
-        var answers = await Task.WhenAll(queries.Select(async query => (
-            query.installation,
-            IsApp: query.kind == "--app",
-            Updates: FlatpakOutput.ParseUpdates(await RunAsync(
-                ["remote-ls", "--updates", query.kind, $"--{query.installation}", Columns(FlatpakOutput.UpdateColumns)],
-                ct, UpdateTimeout).ConfigureAwait(false))))).ConfigureAwait(false);
+        var failures = new List<Exception>();
+        var answers = await Task.WhenAll(queries.Select(async query =>
+        {
+            IReadOnlyList<FlatpakUpdate> found = [];
+            try
+            {
+                found = FlatpakOutput.ParseUpdates(await RunAsync(
+                    ["remote-ls", "--updates", query.kind, $"--{query.installation}", Columns(FlatpakOutput.UpdateColumns)],
+                    ct, UpdateTimeout).ConfigureAwait(false));
+            }
+            catch (Exception e) when (e is InvalidOperationException or TimeoutException)
+            {
+                lock (failures)
+                    failures.Add(e);
+            }
+            return (query.installation, IsApp: query.kind == "--app", Updates: found);
+        })).ConfigureAwait(false);
+        // Some answers are better than none; only when every question failed is the check itself a failure.
+        if (failures.Count == answers.Length)
+            throw failures[0];
 
         var updates = new List<UpdateInfo>();
         foreach (var (installation, isApp, found) in answers)

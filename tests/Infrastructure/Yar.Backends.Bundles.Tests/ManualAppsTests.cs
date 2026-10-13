@@ -87,6 +87,21 @@ public sealed class ManualAppsTests : IDisposable
     }
 
     [Fact]
+    public async Task A_launcher_the_desktop_starts_by_message_is_not_called_broken()
+    {
+        var byMessage = Launcher("portal-app", exec: null) with
+        {
+            Keys = new Dictionary<string, string> { ["DBusActivatable"] = "true" },
+        };
+        var noCommand = Launcher("empty", exec: null);
+
+        var apps = await Provider().ClaimAppsAsync(new DesktopEntryIndex([byMessage, noCommand]), Token);
+
+        Assert.False(apps[0].Technical.ContainsKey("broken"));
+        Assert.Equal("true", apps[1].Technical["broken"]);
+    }
+
+    [Fact]
     public async Task An_appimage_with_a_launcher_is_listed_once()
     {
         var integrated = WriteFile(AppDir, "Krita.AppImage", AppImageHeader(2));

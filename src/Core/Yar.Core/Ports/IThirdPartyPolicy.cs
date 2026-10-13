@@ -37,6 +37,12 @@ public sealed record ThirdPartySummary(
     /// <summary>True when the sources are not all in the state the recorded answer implies.</summary>
     public bool Mixed => On.Count > 0 && Off.Count > 0;
 
+    /// <summary>
+    /// What giving an answer would do: which sources would change, and which are already as asked.
+    /// </summary>
+    public (IReadOnlyList<string> Changing, IReadOnlyList<string> Already) Effect(bool allow) =>
+        allow ? (Off, On) : (On, Off);
+
     /// <param name="isOn">Whether a covered source is switched on right now; null if it is not set up at all.</param>
     public static ThirdPartySummary From(ThirdPartyStatus status, Func<(string Name, string Kind), bool?> isOn)
     {

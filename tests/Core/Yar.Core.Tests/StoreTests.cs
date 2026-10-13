@@ -183,6 +183,20 @@ public class ThirdPartySummaryTests
     }
 
     [Fact]
+    public void Says_what_an_answer_would_change_and_what_is_already_so()
+    {
+        var summary = Summary(ThirdPartyChoice.NotChosen, ("chrome", false), ("steam", true), ("nvidia", null));
+
+        var yes = summary.Effect(allow: true);
+        Assert.Equal(["chrome", "nvidia"], yes.Changing);
+        Assert.Equal(["steam"], yes.Already);
+
+        var no = summary.Effect(allow: false);
+        Assert.Equal(["steam"], no.Changing);
+        Assert.Equal(["chrome", "nvidia"], no.Already);
+    }
+
+    [Fact]
     public void Without_a_recorded_answer_the_switch_shows_what_is_really_set()
     {
         var allOn = Summary(ThirdPartyChoice.NotChosen, ("chrome", true), ("steam", true));

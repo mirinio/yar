@@ -270,6 +270,21 @@ public class FlatpakProviderTests
     }
 
     [Fact]
+    public async Task One_failed_update_question_does_not_hide_the_other_answers()
+    {
+        var partly = new FlatpakProvider(new FakeRunner(arguments =>
+            arguments.Contains("--user") ? new(1, "", "error: no user installation\n")
+            : arguments.Contains("--app") ? new(0, "org.kde.krita\tKrita\t5.3.0\tflathub\n", "")
+            : new(0, "", "")), UserDir, "/usr/bin/flatpak");
+
+        Assert.Single((await partly.GetUpdatesAsync([], Token)).Updates);
+
+        var never = new FlatpakProvider(new FakeRunner(_ => new(1, "", "error: offline\n")), UserDir, "/usr/bin/flatpak");
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => never.GetUpdatesAsync([], Token));
+        Assert.Contains("offline", error.Message);
+    }
+
+    [Fact]
     public async Task A_failing_command_is_an_error_not_an_empty_list()
     {
         var provider = new FlatpakProvider(new FakeRunner(_ => new(1, "", "error: boom\n")), UserDir, "/usr/bin/flatpak");

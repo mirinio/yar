@@ -97,8 +97,12 @@ public sealed class ManualAppsProvider : ISoftwareProvider
         string? installPath = null;
         if (program is null)
         {
-            // The launcher points at something that is gone. The health check picks this up.
-            technical["broken"] = "true";
+            // Some apps are started by the desktop through a message instead of a command line.
+            // Those have no program to look for, and nothing is wrong with them.
+            var startedByMessage = string.IsNullOrWhiteSpace(entry.Exec) && entry.GetKey("DBusActivatable") == "true";
+            // Otherwise the launcher points at something that is gone. The health check picks this up.
+            if (!startedByMessage)
+                technical["broken"] = "true";
         }
         else
         {

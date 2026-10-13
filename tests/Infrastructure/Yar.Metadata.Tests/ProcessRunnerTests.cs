@@ -39,6 +39,15 @@ public class ProcessRunnerTests
     }
 
     [Fact]
+    public async Task A_missing_program_is_an_ordinary_failure()
+    {
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _runner.RunAsync("/nonexistent/yar-test-tool", [], Timeout, Token));
+
+        Assert.Contains("/nonexistent/yar-test-tool", error.Message);
+    }
+
+    [Fact]
     public async Task A_program_that_runs_too_long_is_stopped()
     {
         await Assert.ThrowsAsync<TimeoutException>(

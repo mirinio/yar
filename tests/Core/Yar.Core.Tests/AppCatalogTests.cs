@@ -278,6 +278,23 @@ public class AppCatalogTests
     }
 
     [Fact]
+    public async Task A_load_with_a_failed_provider_does_not_replace_the_saved_one()
+    {
+        var cache = new MemoryCache();
+        await Load(CachedCatalog(RichProvider(), cache));
+        var saved = cache.Entries[SnapshotCache.EntryName];
+
+        var failing = new FakeProvider("packagekit") { Claim = _ => throw new TimeoutException("no answer") };
+        var degraded = await Load(CachedCatalog(failing, cache));
+
+        Assert.Empty(degraded.Apps);
+        Assert.Equal(ProviderAvailability.Error, degraded.Providers[0].Status.Availability);
+        // What the next start opens on is still the last complete picture.
+        Assert.Equal(saved, cache.Entries[SnapshotCache.EntryName]);
+        Assert.Single(CachedCatalog(failing, cache).LoadCached()!.Apps);
+    }
+
+    [Fact]
     public async Task A_broken_cache_never_fails_a_load()
     {
         var catalog = CachedCatalog(RichProvider(), new MemoryCache { Broken = true });

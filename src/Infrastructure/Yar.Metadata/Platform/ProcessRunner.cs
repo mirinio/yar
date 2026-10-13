@@ -33,8 +33,17 @@ public sealed class ProcessRunner : IProcessRunner
         info.Environment["LC_ALL"] = "C.UTF-8";
         info.Environment.Remove("LANGUAGE");
 
-        using var process = Process.Start(info)
-            ?? throw new InvalidOperationException($"Could not start {absolutePath}.");
+        Process? started;
+        try
+        {
+            started = Process.Start(info);
+        }
+        catch (System.ComponentModel.Win32Exception e)
+        {
+            // The tool is missing or may not be run. Callers treat that like any other failed command.
+            throw new InvalidOperationException($"Could not start {absolutePath}: {e.Message}", e);
+        }
+        using var process = started ?? throw new InvalidOperationException($"Could not start {absolutePath}.");
         process.StandardInput.Close();
 
         using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -71,7 +80,7 @@ public sealed class ProcessRunner : IProcessRunner
             {
                 // Stop the tool rather than let it block on a pipe nobody reads.
                 Kill(process);
-                throw new InvalidDataException("The command produced more output than Yar accepts.");
+                throw new InvalidOperationException("The command produced more output than Yar accepts.");
             }
             builder.Append(buffer, 0, read);
         }

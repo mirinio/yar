@@ -169,8 +169,9 @@ internal static class ThirdPartyGroup
     /// <summary>What flipping the switch will do, source by source, so nothing changes by surprise.</summary>
     internal static string ChangePreview(ThirdPartySummary summary, bool allow, Func<string, string> friendly)
     {
-        var changing = (allow ? summary.Off : summary.On).Select(friendly).ToList();
-        var already = (allow ? summary.On : summary.Off).Select(friendly).ToList();
+        var effect = summary.Effect(allow);
+        var changing = effect.Changing.Select(friendly).ToList();
+        var already = effect.Already.Select(friendly).ToList();
         var lines = new List<string>();
         if (changing.Count > 0)
         {
