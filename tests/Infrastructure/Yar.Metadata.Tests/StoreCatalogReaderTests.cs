@@ -137,6 +137,29 @@ public sealed class StoreCatalogReaderTests : IDisposable
     }
 
     [Fact]
+    public void A_catalog_cannot_steer_icon_lookups_out_of_its_icon_folder()
+    {
+        // The icon exists where a hostile origin would lead, outside the icon root.
+        var outside = Path.Combine(_root, "outside", "64x64");
+        Directory.CreateDirectory(outside);
+        File.WriteAllText(Path.Combine(outside, "app.png"), "png");
+        var iconRoot = Path.Combine(_root, "icons");
+        Directory.CreateDirectory(iconRoot);
+        var xml = """
+            <components origin="../outside">
+              <component type="desktop"><id>app.desktop</id><name>App</name>
+                <icon type="cached" height="64" width="64">app.png</icon></component>
+            </components>
+            """;
+        var file = Path.Combine(_root, "hostile.xml");
+        File.WriteAllText(file, xml);
+
+        var entry = Assert.Single(Reader().Read([new(file, "packagekit", null, iconRoot)], TestContext.Current.CancellationToken));
+
+        Assert.Null(entry.IconPath);
+    }
+
+    [Fact]
     public void Picks_the_users_language_for_names()
     {
         var entries = Reader(culture: "de-DE").Read([Write("flathub.xml", Flathub, "flatpak", "system:flathub")], TestContext.Current.CancellationToken);

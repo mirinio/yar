@@ -10,16 +10,49 @@ public sealed class DesktopEntryScanner
 
     private readonly IReadOnlyList<string> _applicationDirs;
     private readonly CultureInfo? _culture;
+    private readonly IReadOnlyList<string>? _desktops;
+    private readonly IReadOnlyList<string>? _searchPath;
 
-    public DesktopEntryScanner(XdgDirs dirs, CultureInfo? culture = null)
-        : this(dirs.ApplicationDirs, culture)
+    /// <param name="currentDesktops">
+    /// The desktop in use, as <c>XDG_CURRENT_DESKTOP</c> lists it ("KDE", "ubuntu:GNOME"). Launchers
+    /// meant for other desktops are then left out, as the app menu does. Null keeps them all.
+    /// </param>
+    /// <param name="searchPath">Where programs are looked for, to honour a launcher's <c>TryExec</c>. Null skips that check.</param>
+    public DesktopEntryScanner(
+        XdgDirs dirs, CultureInfo? culture = null, IReadOnlyList<string>? currentDesktops = null,
+        IReadOnlyList<string>? searchPath = null)
+        : this(dirs.ApplicationDirs, culture, currentDesktops, searchPath)
     {
     }
 
-    public DesktopEntryScanner(IReadOnlyList<string> applicationDirs, CultureInfo? culture = null)
+    public DesktopEntryScanner(
+        IReadOnlyList<string> applicationDirs, CultureInfo? culture = null,
+        IReadOnlyList<string>? currentDesktops = null, IReadOnlyList<string>? searchPath = null)
     {
         _applicationDirs = applicationDirs;
         _culture = culture;
+        _desktops = currentDesktops;
+        _searchPath = searchPath;
+    }
+
+    /// <summary>The rules by which a desktop leaves a launcher out of its menu, beyond <c>NoDisplay</c> and <c>Hidden</c>.</summary>
+    public static bool IsShownOn(DesktopEntry entry, IReadOnlyList<string>? desktops, IReadOnlyList<string>? searchPath)
+    {
+        static string[] List(string? value) =>
+            value?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [];
+
+        if (desktops is not null)
+        {
+            var only = List(entry.GetKey("OnlyShowIn"));
+            if (only.Length > 0 && !only.Any(desktops.Contains))
+                return false;
+            if (List(entry.GetKey("NotShowIn")).Any(desktops.Contains))
+                return false;
+        }
+
+        // "TryExec" names a program whose absence means the app is not really installed.
+        return searchPath is null || string.IsNullOrWhiteSpace(entry.TryExec) ||
+            DesktopExec.FindProgram(entry.TryExec.Trim(), searchPath) is not null;
     }
 
     public DesktopEntryIndex Scan()
@@ -38,7 +71,7 @@ public sealed class DesktopEntryScanner
                     continue;
 
                 var entry = DesktopEntryParser.ParseFile(path, desktopId, _culture);
-                if (entry is { IsVisibleApplication: true })
+                if (entry is { IsVisibleApplication: true } && IsShownOn(entry, _desktops, _searchPath))
                     entries.Add(entry);
             }
         }

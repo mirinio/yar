@@ -125,8 +125,9 @@ public static partial class Dep11Yaml
 
     private static (string? Path, string? Name) Icon(Dictionary<object, object>? icon, string iconRoot, string origin)
     {
-        if (icon is null)
-            return (null, null);
+        // A catalog names its own origin; it must not be able to steer icon lookups out of the icon folder.
+        if (icon is null || !StoreCatalogReader.IsPlainName(origin))
+            return (null, icon is null ? null : Text(icon, "stock"));
 
         string? best = null;
         var bestWidth = 0;

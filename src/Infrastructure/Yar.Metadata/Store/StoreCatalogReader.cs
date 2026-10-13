@@ -244,7 +244,7 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
                     var candidates = new[]
                     {
                         Path.Combine(file.IconRoot, folder, value),
-                        origin is null ? null : Path.Combine(file.IconRoot, origin, folder, value),
+                        IsPlainName(origin) ? Path.Combine(file.IconRoot, origin!, folder, value) : null,
                     };
                     if (candidates.FirstOrDefault(c => c is not null && File.Exists(c)) is { } found)
                     {
@@ -352,6 +352,10 @@ public sealed class StoreCatalogReader(XdgDirs dirs, ICacheStore? cache = null, 
         }
         return [];
     }
+
+    /// <summary>True for a name that can be one path segment and nothing else: no slashes, not ".." or hidden.</summary>
+    public static bool IsPlainName(string? name) =>
+        !string.IsNullOrEmpty(name) && name.IndexOfAny(['/', '\\']) < 0 && !name.StartsWith('.');
 
     public static bool IsYaml(string path) =>
         path.EndsWith(".yml", StringComparison.Ordinal) || path.EndsWith(".yml.gz", StringComparison.Ordinal);

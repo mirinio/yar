@@ -42,6 +42,17 @@ public sealed class FileCacheStoreTests : IDisposable
     }
 
     [Fact]
+    public void Entries_too_large_to_be_read_back_are_not_written()
+    {
+        var store = new FileCacheStore(Dir);
+        store.Write("big.json", "small");
+
+        store.Write("big.json", new string('x', (int)FileCacheStore.MaxEntryBytes + 1));
+
+        Assert.Equal("small", store.Read("big.json"));
+    }
+
+    [Fact]
     public void A_directory_that_cannot_be_written_is_not_an_error()
     {
         // A file where the cache directory should be: creating the directory fails.

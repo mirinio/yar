@@ -19,7 +19,9 @@ public static class DesktopEntryParser
         try
         {
             var info = new FileInfo(path);
-            if (!info.Exists || info.Length > MaxFileBytes)
+            // An empty file is no launcher. This also skips named pipes, which report no length
+            // and would make reading wait forever.
+            if (!info.Exists || info.Length == 0 || info.Length > MaxFileBytes)
                 return null;
             return Parse(File.ReadAllText(path, Encoding.UTF8), path, desktopId, culture);
         }

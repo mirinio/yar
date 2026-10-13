@@ -39,6 +39,9 @@ public sealed class YarHost : IDisposable
             new PackageKitWatcher(_packageKit),
         ], quietPeriod: TimeSpan.FromSeconds(2));
 
+        var desktops = (Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP") ?? "")
+            .Split(':', StringSplitOptions.RemoveEmptyEntries);
+
         // Claim order matters: each provider only sees the launchers the earlier ones left.
         ISoftwareProvider[] providers =
         [
@@ -64,7 +67,7 @@ public sealed class YarHost : IDisposable
 
         Catalog = new AppCatalog(
             providers,
-            _ => Task.Run(() => new DesktopEntryScanner(Dirs).Scan()),
+            _ => Task.Run(() => new DesktopEntryScanner(Dirs, currentDesktops: desktops, searchPath: SearchPath).Scan()),
             new CatalogAnnotator(
                 KnownSources.LoadBundled(Os.Id), () => ComponentIndex.Load(Dirs, cache: Cache),
                 (path ?? "/usr/local/bin:/usr/bin:/bin").Split(':', StringSplitOptions.RemoveEmptyEntries)),

@@ -36,6 +36,29 @@ public sealed class DesktopEntryScannerTests : IDisposable
     }
 
     [Fact]
+    public void Launchers_meant_for_other_desktops_or_missing_programs_are_left_out()
+    {
+        Write("system", "everywhere.desktop", "Name=Everywhere");
+        Write("system", "kde-only.desktop", "Name=KDE only\nOnlyShowIn=KDE;");
+        Write("system", "gnome-only.desktop", "Name=GNOME only\nOnlyShowIn=GNOME;Unity;");
+        Write("system", "not-kde.desktop", "Name=Not KDE\nNotShowIn=XFCE;KDE");
+        Write("system", "has-program.desktop", "Name=Has program\nTryExec=sh");
+        Write("system", "lost-program.desktop", "Name=Lost program\nTryExec=yar-no-such-program");
+        Write("system", "empty.desktop", "");
+        File.WriteAllText(Path.Combine(_root, "system", "applications", "empty.desktop"), "");
+        IReadOnlyList<string> dirs = [Path.Combine(_root, "system", "applications")];
+
+        var onKde = new DesktopEntryScanner(dirs, CultureInfo.InvariantCulture, ["KDE"], ["/bin", "/usr/bin"]).Scan();
+        Assert.Equal(["Everywhere", "Has program", "KDE only"], onKde.Entries.Select(e => e.Name));
+
+        var onUbuntu = new DesktopEntryScanner(dirs, CultureInfo.InvariantCulture, ["ubuntu", "GNOME"], ["/bin", "/usr/bin"]).Scan();
+        Assert.Equal(["Everywhere", "GNOME only", "Has program", "Not KDE"], onUbuntu.Entries.Select(e => e.Name));
+
+        // Without knowing the desktop or where programs live, nothing is left out on those grounds.
+        Assert.Equal(6, new DesktopEntryScanner(dirs, CultureInfo.InvariantCulture).Scan().Entries.Count);
+    }
+
+    [Fact]
     public void Earlier_directories_shadow_later_ones()
     {
         var userPath = Write("user", "app.desktop", "Name=User Version");

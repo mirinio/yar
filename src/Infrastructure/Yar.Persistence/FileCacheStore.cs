@@ -26,6 +26,9 @@ public sealed class FileCacheStore(string directory) : ICacheStore
     public void Write(string name, string content)
     {
         var path = PathOf(name);
+        // What could not be read back is not worth writing.
+        if (content.Length > MaxEntryBytes)
+            return;
         try
         {
             Directory.CreateDirectory(directory, OwnerOnlyDirectory);
