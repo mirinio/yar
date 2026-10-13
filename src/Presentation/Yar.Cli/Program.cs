@@ -9,7 +9,10 @@ var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
 if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove" or "inspect" or "add" or "verify"))
 {
-    Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|store <words>> [--json] [--timings]");
+    Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|attention|storage|store <words>> [--json] [--timings]");
+    Console.Error.WriteLine("       yar-apps install <app id> | remove <app> | inspect <file> | add <file or https link> | verify <app>");
+    Console.Error.WriteLine("       yar-apps history | undo <id>");
+    Console.Error.WriteLine("Commands that change something print their plan and do nothing without --yes.");
     return 2;
 }
 

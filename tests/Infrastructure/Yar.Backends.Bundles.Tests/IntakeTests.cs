@@ -368,4 +368,37 @@ public sealed class IntakeTests : IDisposable
         Assert.False(File.Exists(launcher));
         Assert.True(File.Exists(Path.Combine(folder, "my-notes.txt")));
     }
+
+    [Fact]
+    public async Task When_adding_fails_half_way_nothing_is_left_and_a_moved_file_goes_back()
+    {
+        var file = MakeAppImage();
+        var report = await _intake.InspectAsync(file, null, Token);
+        var choices = new IntakeChoices(report.SuggestedName, Apps) { DeleteOriginal = true };
+        var plan = await _intake.PlanAsync(report, choices, Token);
+        // The app-menu folder cannot be written to, so the last step fails.
+        Directory.CreateDirectory(Path.GetDirectoryName(_dirs.UserApplicationsDir)!);
+        File.WriteAllText(_dirs.UserApplicationsDir, "in the way");
+
+        await Assert.ThrowsAnyAsync<IOException>(() => _intake.AddAsync(report, choices, plan, Quiet, Token));
+
+        Assert.True(File.Exists(file));
+        Assert.False(File.Exists(Path.Combine(Apps, "shiny-app.AppImage")));
+        Assert.Empty(_manifests.ReadAll());
+    }
+
+    [Fact]
+    public async Task Something_that_appears_at_the_destination_after_the_preview_is_never_deleted()
+    {
+        var report = await _intake.InspectAsync(MakeAppImage(), null, Token);
+        var choices = new IntakeChoices(report.SuggestedName, Apps);
+        var plan = await _intake.PlanAsync(report, choices, Token);
+        var other = await _intake.InspectAsync(report.SourcePath, null, Token);
+        await _intake.AddAsync(other, choices, await _intake.PlanAsync(other, choices, Token), Quiet, Token);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _intake.AddAsync(report, choices, plan, Quiet, Token));
+
+        Assert.True(File.Exists(Path.Combine(Apps, "shiny-app.AppImage")));
+        Assert.Single(_manifests.ReadAll());
+    }
 }

@@ -392,6 +392,14 @@ public sealed partial class BundleIntake(
 
         var name = plan.Name;
         var created = new List<string>();
+        var movedOriginal = false;
+        // Only what was not there a moment before it was made is Yar's to clean up if something goes wrong.
+        void Claim(string path)
+        {
+            if (File.Exists(path) || Directory.Exists(path))
+                throw new IOException($"{path} is already there.");
+            created.Add(path);
+        }
         try
         {
             progress.Report(new(OperationPhase.Installing, Detail: "putting it in place"));
@@ -402,22 +410,27 @@ public sealed partial class BundleIntake(
             if (layout.Icon is not null)
             {
                 Directory.CreateDirectory(places.IconDir);
-                created.Add(layout.Icon);
+                Claim(layout.Icon);
                 File.Copy(choices.IconPath!, layout.Icon, overwrite: false);
             }
 
             if (report.Kind == BundleKind.Archive)
             {
-                created.Add(layout.Destination);
+                Claim(layout.Destination);
                 MoveFolder(report.StagedPath!, layout.Destination, ct);
             }
             else
             {
-                created.Add(layout.Destination);
+                Claim(layout.Destination);
                 if (choices.DeleteOriginal)
+                {
                     File.Move(report.SourcePath, layout.Destination, overwrite: false);
+                    movedOriginal = true;
+                }
                 else
+                {
                     File.Copy(report.SourcePath, layout.Destination, overwrite: false);
+                }
                 File.SetUnixFileMode(
                     layout.Destination,
                     File.GetUnixFileMode(layout.Destination) | UnixFileMode.UserRead | UnixFileMode.UserWrite |
@@ -430,7 +443,7 @@ public sealed partial class BundleIntake(
             if (layout.Launcher is not null)
             {
                 Directory.CreateDirectory(places.LauncherDir);
-                created.Add(layout.Launcher);
+                Claim(layout.Launcher);
                 using var stream = new FileStream(layout.Launcher, FileMode.CreateNew, FileAccess.Write);
                 using var writer = new StreamWriter(stream);
                 writer.Write(LauncherText(
@@ -438,7 +451,7 @@ public sealed partial class BundleIntake(
                     layout.Icon, report.Categories, layout.Slug, takesFiles: report.Kind == BundleKind.AppImage));
             }
 
-            created.Add(manifests.PathOf(layout.Slug));
+            Claim(manifests.PathOf(layout.Slug));
             manifests.Write(new(
                 layout.Slug, name, report.Kind.ToString(), (time ?? TimeProvider.System).GetUtcNow(), layout.Destination,
                 program, layout.Launcher, layout.Icon, report.OriginUrl ?? report.FileName, report.Sha256, choices.HashVerified));
@@ -450,7 +463,10 @@ public sealed partial class BundleIntake(
             {
                 try
                 {
-                    if (Directory.Exists(path))
+                    // The user's own file was moved, not copied: it goes back, it is not deleted.
+                    if (movedOriginal && path == layout.Destination && !File.Exists(report.SourcePath))
+                        File.Move(path, report.SourcePath, overwrite: false);
+                    else if (Directory.Exists(path))
                         Directory.Delete(path, recursive: true);
                     else
                         File.Delete(path);
