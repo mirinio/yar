@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="assets/cube_logo.svg" width="96" alt="Yar's logo: a cube">
+<img src="assets/cube_logo.svg" width="96" alt="Yar logo">
 
 # Yar
 
-**Your friend for apps on Linux.**
+**An app manager for Linux: every installed app, from any source, in one place.**
 
 [![CI](https://github.com/mirinio/yar/actions/workflows/ci.yml/badge.svg)](https://github.com/mirinio/yar/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/mirinio/yar?include_prereleases)](https://github.com/mirinio/yar/releases)
@@ -13,31 +13,13 @@
 
 </div>
 
-On Linux, apps come from many places: your distribution, Flathub, the Snap Store, or a file
-you downloaded from a website. Each is managed differently, and after a while nobody knows
-what is installed where, or how to get rid of it cleanly.
-
-**Yar** puts all of it in one friendly place. It is made for people coming from Windows who
-want to see their apps, install and remove them, and understand what is going on, in plain
-words.
+On Linux, apps come from several places: the distribution's packages, Flatpak, Snap, and files
+downloaded from websites. Each is managed with a different tool. Yar shows them together and
+lets you install, update and remove them from one window, with a preview before every change.
 
 <p align="center">
-  <img src="docs/demo.gif" alt="Yar: browsing the Store, the preview before installing, progress, and the history" width="880">
+  <img src="docs/demo.gif" alt="Browsing the Store, the preview before installing, the progress bar and the history" width="880">
 </p>
-
-## Why Yar
-
-- **Everything, from anywhere, in one list.** Distribution packages, Flatpak, Snap, AppImages
-  and apps you unpacked yourself, each with where it came from, where it lives and what it may reach.
-- **Downloaded apps, done properly.** Drop an AppImage, an archive or a package on the window:
-  Yar checks it without running it, sets it up with a menu entry, and can remove it cleanly
-  later, because it wrote down what it created.
-- **Nothing happens by surprise.** Every install, removal and update shows a preview first,
-  and the history can undo most changes.
-- **Honest, plain language.** Yar explains terms a newcomer may not know, and says so when
-  something is risky, like an app that can read all your files.
-
-## Screenshots
 
 <table>
 <tr>
@@ -45,10 +27,10 @@ words.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/my-apps-dark.png">
-  <img src="docs/screenshots/my-apps-light.png" alt="My Apps: every installed app, wherever it came from">
+  <img src="docs/screenshots/my-apps-light.png" alt="My Apps: every installed app, grouped by where it came from">
 </picture>
 
-**My Apps**: everything installed, wherever it came from.
+**My Apps**: everything installed, grouped by source.
 </td>
 <td width="50%">
 
@@ -57,96 +39,98 @@ words.
   <img src="docs/screenshots/store-app-light.png" alt="An app in the Store with its sources and an Install button">
 </picture>
 
-**Store**: each app once, with every source that offers it.
+**Store**: one entry per app, with every source that offers it.
 </td>
 </tr>
 <tr>
-<td>
+<td width="50%">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/install-preview-dark.png">
   <img src="docs/screenshots/install-preview-light.png" alt="The preview before installing, with a warning about broad access">
 </picture>
 
-**Preview**: what comes along, how big it is, what to know.
+**Preview**: what will be installed, its size and any warnings.
 </td>
-<td>
+<td width="50%">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/add-app-dark.png">
-  <img src="docs/screenshots/add-app-light.png" alt="Adding an app from a downloaded archive, with the hash check">
+  <img src="docs/screenshots/add-app-light.png" alt="Adding an app from a downloaded archive">
 </picture>
 
-**Add an app**: from a file or a link, checked first.
+**Add an app**: from a downloaded file or a link.
 </td>
 </tr>
 <tr>
-<td>
+<td width="50%">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/history-dark.png">
   <img src="docs/screenshots/history-light.png" alt="The history of changes, with Undo">
 </picture>
 
-**History**: everything Yar changed, with Undo.
+**History**: every change made through Yar, with Undo.
 </td>
-<td>
+<td width="50%">
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/updates-dark.png">
   <img src="docs/screenshots/updates-light.png" alt="Waiting updates, one at a time or all at once">
 </picture>
 
-**Updates**: one app, your apps, or everything.
+**Updates**: one app, all apps, or everything.
 </td>
 </tr>
 </table>
 
-## What it does
+## Using Yar
 
-- **My Apps**: every app in your app menu, split into "from sources" and "installed myself",
-  with category tags and search. Each app's page shows where it came from, its version and
-  size, where its files and data are, and what it may reach on your computer.
-- **Store**: browse and search everything your sources offer, with pictures, ratings,
-  reviews and install counts. An app offered by several sources is listed once, with the
-  differences explained and one suggested.
-- **Install, update and remove** Flatpak apps and your distribution's packages. Removing keeps
-  an app's data unless you say otherwise, and then it goes to the Trash.
-- **Add an app you downloaded**: AppImage, single program, zip or tar archive, RPM or Debian
-  package, Flatpak file, or a download link. You can adjust the name, picture, folder and
-  taskbar pin, and compare the file with the hash its publisher states.
-- **Updates**: what is waiting, with security fixes marked; update one app, your apps, or everything.
-- **History**: every change, with Undo where that is possible.
-- **Sources**: understand, add and switch where your apps come from, with how well Yar knows each one.
-- **Storage**: disks, unused space, and a picture of what your apps take, with their data.
+**See what is installed.** *My Apps* lists every app in your app menu, grouped by where it
+came from. Search by name or by category. An app's page shows its version and size, where
+its files and data are, and what it is allowed to access (for Flatpak apps).
 
-## Safe by design
+**Install an app.** Search the *Store*, open the app and press **Install**. If several sources
+offer it, each is listed with how it differs; the suggested one is marked. A preview shows
+everything that will be installed, the download and disk size, and warnings such as access
+to all your files. Nothing happens until you confirm. System packages ask for your password
+in your system's own dialog.
 
-Yar manages the software on your computer, so it is careful:
+**Add an app you downloaded.** Drop the file on the window, use **Add an app…** in *My Apps* or
+the *Store*, or paste a download link. Supported: AppImage, single programs, zip and tar
+archives, `.rpm` / `.deb` packages, `.flatpakref` / `.flatpak`. Yar identifies the file
+without running it and checks that it can run on this computer. In the preview you can change
+the name, picture, install folder and the program that starts it, add it to the app menu or
+taskbar, and paste the publisher's checksum to verify the file. AppImages and archives go to
+`~/Applications` by default (changeable in the settings) and get an app-menu entry; packages
+go through your package manager, Flatpak files through Flatpak.
 
-- It **never runs as root**. Your system asks for your password in its own dialog when needed.
-- It **never runs a downloaded file** to find out what it is.
-- It **moves to the Trash** instead of deleting, and refuses a removal that would take a vital
-  part of your system along.
-- It **shows a preview before every change** and carries out exactly what it showed.
-- It sends **nothing about you** anywhere. Online extras (ratings, pictures) can be switched off.
+**Update.** The *Updates* tab lists waiting updates with security fixes marked. Update one
+app, all apps, or everything; each shows a preview first.
 
-More in [SECURITY.md](SECURITY.md).
+**Remove.** Press **Remove** on an app's page. Its settings and data are kept unless you choose
+to remove them too; removed data goes to the Trash. Apps added from a file are removed exactly,
+using the record Yar kept when it added them.
 
-## Try it
+**Undo.** *History* lists every change made through Yar. Most can be undone: an installed app
+is removed again, a removed one is reinstalled and its data restored from the Trash. Updates
+cannot be undone.
+
+**Sources and storage.** *Sources* shows where your apps come from, lets you add Flatpak
+sources and turn sources on or off. *Storage* shows your disks and how much space each app
+and its data take.
+
+## Install
 
 **From a release**: download `yar-<version>-linux-x64.tar.gz` from
-[Releases](https://github.com/mirinio/yar/releases), check it against the `.sha256` file next
+[Releases](https://github.com/mirinio/yar/releases) and check it against the `.sha256` file next
 to it, then:
 
 ```bash
 tar -xzf yar-*-linux-x64.tar.gz
 cd yar-*-linux-x64
-./install-local.sh        # for your user only, no password; ./uninstall-local.sh removes it again
+./install-local.sh        # installs for your user only, no password; ./uninstall-local.sh removes it
 ```
-
-Yar is then in your app menu. It needs **GTK 4.14+** and **libadwaita 1.5+**, which current
-distributions have.
 
 **From source**, with the .NET 10 SDK:
 
@@ -155,59 +139,69 @@ git clone https://github.com/mirinio/yar.git && cd yar
 dotnet run --project src/Presentation/Yar.Gtk
 ```
 
+Requirements: GTK 4.14 or newer and libadwaita 1.5 or newer.
+
 ## Where it works
 
 | | Status |
 |---|---|
-| Fedora 44 (KDE Plasma) | Developed and used here, app and command line |
-| Ubuntu 24.04 | Everything that changes the system tested in a container; the app window not yet tried |
-| openSUSE, Arch, other distributions | Not tried yet; Yar talks to PackageKit, so they may well work |
-| Snap | Apps are listed; installing and removing snaps is not supported yet |
-| Not yet tried on a real desktop | The system's password prompt, dropping a file with the mouse, pinning to the taskbar |
+| Fedora 44 (KDE Plasma) | Developed and used here |
+| Ubuntu 24.04 | Installing, removing, updating and adding apps tested in a container; the window itself not yet tried |
+| openSUSE, Arch, others | Not tried; Yar uses PackageKit, so they may work |
+| Snap | Snap apps are listed; installing and removing snaps is not supported yet |
+| Not yet tried on a real desktop | The system password prompt, dropping a file with the mouse, pinning to the taskbar |
 
-Tried it somewhere else? Please [tell us](https://github.com/mirinio/yar/issues).
+Reports from other distributions are welcome in the [issues](https://github.com/mirinio/yar/issues).
 
-## Status and roadmap
+## How it works
 
-Yar is young: **0.3.0** is the first public version. Next up are cleaning up what removed apps
-left behind, unused Flatpak runtimes and temporary files, through the same preview → Trash →
-undo path, and wider testing on other distributions. The [changelog](CHANGELOG.md) lists what
-changed in each version.
+- **Apps come from launchers.** Yar reads every app-menu entry (`.desktop` file) and asks each
+  backend which ones it owns: Flatpak, then Snap, then the distribution's packages; what is left
+  was installed by hand. This keeps libraries and command-line tools out of the list.
+- **Backends**: distribution packages through PackageKit over D-Bus (dnf, apt, zypper, pacman),
+  Flatpak through the `flatpak` command, Snap through snapd's socket. The Store reads the app
+  catalogs (AppStream) already on your computer.
+- **Every change is planned first.** The backend works out what a change involves (for packages,
+  a simulated transaction), Yar shows that plan, and carries out exactly that plan once you
+  confirm. Changes run one at a time and can be cancelled.
+- **Every change is recorded** in `~/.local/state/yar/history.jsonl`, which is what *History*
+  and Undo use.
+- **Downloaded files are never run** to inspect them. Archives are unpacked into a temporary
+  folder first, with checks against paths that leave the folder, links pointing outside, and
+  oversized content. For each added app Yar keeps a note of what it created, in
+  `~/.local/share/yar/apps`.
+- **Removing goes to the Trash**, and a removal that would take a vital system package with it
+  (kernel, systemd, the package manager, the desktop) is refused.
+- **Yar never runs as root.** Changes outside your home folder go through PackageKit or Flatpak,
+  which ask for your password themselves.
+- `yar-apps` is a command-line tool that does what the window does, for scripting and testing:
+  `yar-apps apps`, `yar-apps install <id>`, `yar-apps add <file>`, `yar-apps history` and more;
+  changes need `--yes`.
 
-## What goes over the internet
+More about safety in [SECURITY.md](SECURITY.md).
 
-All of it is behind one switch in the settings:
+### What goes over the internet
+
+All optional, behind one switch in the settings:
 
 | What | From | What Yar sends |
 |---|---|---|
-| Star ratings and reviews | odrs.gnome.org | For reviews: the app, your language, your distribution's name, a throwaway random ID |
+| Star ratings and reviews | odrs.gnome.org | For reviews: the app, your language, your distribution's name, a random ID |
 | Picks, trending, install counts, sizes, permissions | flathub.org | The app's ID |
-| Pictures of apps | dl.flathub.org, dl.fedoraproject.org, appstream.ubuntu.com, appstream.debian.org | The picture's address; no other servers are contacted for pictures |
-| New GitHub projects (only if switched on) | api.github.com | The programming languages you ticked; no account |
+| Pictures of apps | dl.flathub.org, dl.fedoraproject.org, appstream.ubuntu.com, appstream.debian.org | The picture's address |
+| New GitHub projects (off by default) | api.github.com | The programming languages you chose |
 
-A download link you paste yourself is fetched from wherever it points, over https only.
+A download link you paste is fetched from wherever it points, over https only.
 
-## How it is built
+## Contributing
 
-Yar is written in C# on .NET 10, with GTK 4 and libadwaita through
-[Gir.Core](https://gircore.github.io). It talks to PackageKit over D-Bus, so the same code
-covers dnf, apt, zypper and pacman, and to Flatpak and snapd directly. The code follows a
-hexagonal layout: a core that knows nothing about the desktop, one project per kind of
-software, and the app and the command-line tool `yar-apps` on top.
-[CONTRIBUTING.md](CONTRIBUTING.md) explains the layout, how to build and test, and the
-throwaway container in which installs are tried for real.
+[CONTRIBUTING.md](CONTRIBUTING.md) explains how the code is organised, how to build and test,
+and the throwaway container in which installs are tested for real. Yar is written in C# on
+.NET 10 with GTK 4 and libadwaita through [Gir.Core](https://gircore.github.io).
 
-## Made with an AI assistant
-
-Yar is written with Claude, Anthropic's AI assistant, under its maintainer's direction, and
-checked with automated tests and real installs in throwaway containers. [AI.md](AI.md) says
-who does what and how the work is checked.
-
-## The name
-
-*Yar* (یار) is Persian for "friend", and *yaar* means "buddy" in Hindi and Urdu: an app that
-looks after your apps, so you don't have to know what a repository is.
+Yar is developed with the help of an AI assistant (Claude, by Anthropic). [AI.md](AI.md)
+describes how the work is checked.
 
 ## License
 
-Yar is free software under the [GNU General Public License, version 3 or later](LICENSE).
+GPL-3.0-or-later. See [LICENSE](LICENSE).

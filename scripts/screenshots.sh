@@ -57,8 +57,8 @@ magick -delay 240 -loop 0 "$work"/frames/*.png -resize 820x -dither FloydSteinbe
 magick -size 1280x640 gradient:'#1e2a44-#241f31' \
   \( -background none assets/cube_logo.svg -resize 150x150 \) -geometry +80+120 -composite \
   -font Noto-Sans-Bold -fill white -pointsize 92 -annotate +80+380 'Yar' \
-  -font Noto-Sans -fill '#c8d0e0' -pointsize 34 -annotate +84+440 'Your friend for apps on Linux' \
-  -pointsize 24 -fill '#9aa4b8' -annotate +84+500 'Everything installed, from anywhere, in one place.' \
+  -font Noto-Sans-Regular -fill '#c8d0e0' -pointsize 34 -annotate +84+440 'An app manager for Linux' \
+  -pointsize 21 -fill '#9aa4b8' -annotate +84+500 'Every installed app, from any source, in one place.' \
   \( "$out/store-app-dark.png" -resize 620x \( +clone -background black -shadow 60x14+0+10 \) +swap -background none -layers merge +repage \) \
   -geometry +610+110 -composite -strip docs/social-preview.png
 

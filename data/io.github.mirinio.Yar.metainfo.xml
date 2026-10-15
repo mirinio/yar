@@ -2,7 +2,7 @@
 <component type="desktop-application">
   <id>io.github.mirinio.Yar</id>
   <name>Yar</name>
-  <summary>Your friend for apps on Linux</summary>
+  <summary>Every installed app, from any source, in one place</summary>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
   <developer id="io.github.mirinio">
@@ -10,9 +10,9 @@
   </developer>
   <description>
     <p>
-      Yar (the Persian word for "friend") shows everything installed on your computer in one
-      place, whether it came from your distribution, from Flathub, from the Snap Store or from
-      a file you downloaded yourself, and helps you look after it in plain language.
+      Yar shows everything installed on your computer in one place, whether it came from your
+      distribution, from Flathub, from the Snap Store or from a file you downloaded, and lets
+      you install, update and remove it from one window.
     </p>
     <ul>
       <li>See every app, where it came from, where it lives and what it may reach</li>
