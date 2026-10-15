@@ -53,7 +53,7 @@ internal static class KindPage
                 help: T._("A source is a place apps are downloaded from, like a store. Your computer checks the " +
                     "sources that are turned on when it looks for new apps and updates."));
             foreach (var source in sources)
-                group.Add(Widgets.SourceRow(ui, source));
+                group.Add(SourceWidgets.Row(ui, source));
             page.Add(group);
         }
 

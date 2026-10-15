@@ -53,7 +53,7 @@ internal static class AddAppPage
             busy.Child = null;
             busy.IconName = "dialog-warning-symbolic";
             busy.Title = T._("Hmm, I couldn't look at that file");
-            busy.Description = Widgets.Escape(AddSourcePages.Short(e.Message));
+            busy.Description = Widgets.Escape(Widgets.Short(e.Message));
             return;
         }
         if (cancel.IsCancellationRequested)
@@ -379,7 +379,7 @@ internal static class AddAppPage
             }
             catch (Exception e) when (e is not OutOfMemoryException)
             {
-                ui.Toast(T.F("Hmm, I couldn't work that out: {0}", AddSourcePages.Short(e.Message)));
+                ui.Toast(T.F("Hmm, I couldn't work that out: {0}", Widgets.Short(e.Message)));
                 return;
             }
             void LastLook() => ChangeDialog.Confirm(ui, T.F("Add {0}?", plan.Name), T._("Add"), plan, async () =>

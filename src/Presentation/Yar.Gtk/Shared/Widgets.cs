@@ -349,96 +349,6 @@ internal static class Widgets
         return row;
     }
 
-    /// <summary>
-    /// The on/off switch of a source. Turning on a source nobody vouches for asks first, and a
-    /// change that fails or is cancelled puts the switch back where it was.
-    /// </summary>
-    public static Gtk.Switch SourceSwitch(Ui ui, ISourceManager manager, SourceInfo source)
-    {
-        var toggle = Gtk.Switch.New();
-        toggle.Active = source.Enabled;
-        toggle.Valign = Gtk.Align.Center;
-        toggle.TooltipText = source.Enabled ? T._("Turn this source off") : T._("Turn this source on");
-
-        var settingBack = false;
-        void Revert()
-        {
-            settingBack = true;
-            toggle.Active = source.Enabled;
-            settingBack = false;
-        }
-
-        toggle.OnNotify += (_, args) =>
-        {
-            if (args.Pspec.GetName() != "active" || settingBack || toggle.Active == source.Enabled)
-                return;
-
-            var wanted = toggle.Active;
-            if (wanted && source.Trust is TrustLevel.Unknown or TrustLevel.ThirdParty)
-            {
-                Confirm(
-                    ui, T.F("Turn on {0}?", source.Name), Presentation.TrustExplanation(source.Trust),
-                    T._("Turn on"), destructive: false,
-                    confirmed: () => SwitchSource(ui, source, wanted, toggle, Revert),
-                    cancelled: Revert);
-            }
-            else if (!wanted && source.Trust == TrustLevel.Distro)
-            {
-                // The system's own sources are where security updates come from.
-                Confirm(
-                    ui, T.F("Turn off {0}?", source.Name),
-                    T._("Your system gets its own apps and security updates from here. With it off, you may " +
-                        "stop getting updates. Only turn it off if you know why you need to."),
-                    T._("Turn off"), destructive: true,
-                    confirmed: () => SwitchSource(ui, source, wanted, toggle, Revert),
-                    cancelled: Revert);
-            }
-            else
-            {
-                SwitchSource(ui, source, wanted, toggle, Revert);
-            }
-        };
-        return toggle;
-    }
-
-    private static async void SwitchSource(
-        Ui ui, SourceInfo source, bool enabled, Gtk.Switch toggle, Action revert)
-    {
-        toggle.Sensitive = false;
-        var done = await ui.Host.Make.SwitchSourceAsync(source, enabled);
-        if (done.Outcome == ChangeOutcome.Done)
-        {
-            ui.Toast(enabled ? T.F("{0} is now turned on.", source.Name) : T.F("{0} is now turned off.", source.Name));
-            ui.Refresh();
-            return;
-        }
-        // Includes the user closing the password prompt: nothing was changed.
-        revert();
-        toggle.Sensitive = true;
-        ui.Toast(T.F("I left {0} as it was: {1}", source.Name, AddSourcePages.Short(done.Problem ?? T._("it was cancelled"))));
-    }
-
-    public static Adw.ActionRow SourceRow(Ui ui, SourceInfo source)
-    {
-        var apps = ui.Presentation.AppsOf(source).Count;
-        var tags = new List<Gtk.Widget>();
-        if (apps > 0)
-            tags.Add(Tag(T.F(apps == 1 ? "{0} app" : "{0} apps", apps)));
-        if (source.ProviderId != "manual")
-            tags.Add(TrustTag(source.Trust));
-        // The switch sits right in the list, so nobody has to open each source to find it.
-        if (ui.Host.SourceManagerFor(source.ProviderId) is { } manager && manager.CanToggle(source))
-            tags.Add(SourceSwitch(ui, manager, source));
-        else if (!source.Enabled)
-            tags.Add(Tag(T._("Turned off")));
-
-        var row = Navigation(source.Name, source.Description, () => ui.ShowSource(source), [.. tags]);
-        row.SubtitleLines = 2;
-        if (!source.Enabled)
-            row.AddCssClass("dim-label");
-        return row;
-    }
-
     // Opening something in another program can fail or be cancelled; say so instead of going quiet.
     private static async void Run(Ui ui, Task<bool> opening)
     {
@@ -463,4 +373,11 @@ internal static class Widgets
     }
 
     public static string Escape(string text) => GLib.Functions.MarkupEscapeText(text, -1);
+
+    /// <summary>The last line of a backend's message, cut to a length that fits a toast or a row.</summary>
+    public static string Short(string message)
+    {
+        var line = message.Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? message;
+        return line.Length > 160 ? line[..160] + "…" : line;
+    }
 }

@@ -128,10 +128,6 @@ public sealed class YarHost : IDisposable
     public T? Ability<T>(string providerId)
         where T : class => _providers.FirstOrDefault(p => p.Id == providerId) as T;
 
-    /// <summary>The part of a provider that can change its sources, if it has one.</summary>
-    public ISourceManager? SourceManagerFor(string providerId) =>
-        _providers.FirstOrDefault(p => p.Id == providerId) as ISourceManager;
-
     /// <summary>The record of everything Yar changed on this computer.</summary>
     public IChangeJournal Journal { get; }
 

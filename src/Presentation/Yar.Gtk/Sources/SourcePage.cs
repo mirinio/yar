@@ -21,7 +21,7 @@ internal static class SourcePage
             trust.AddSuffix(Widgets.HelpButton(Presentation.TrustExplanation(source.Trust)));
             about.Add(trust);
 
-            var manager = ui.Host.SourceManagerFor(source.ProviderId);
+            var manager = ui.Host.Ability<ISourceManager>(source.ProviderId);
             if (manager?.CanToggle(source) == true)
             {
                 var status = Adw.ActionRow.New();
@@ -30,7 +30,7 @@ internal static class SourcePage
                 status.Subtitle = source.Scope == SourceScope.User
                     ? T._("When on, your computer looks here for apps and updates.")
                     : T._("When on, your computer looks here for apps and updates. Changing this asks for your password.");
-                var toggle = Widgets.SourceSwitch(ui, manager, source);
+                var toggle = SourceWidgets.Switch(ui, source);
                 status.AddSuffix(toggle);
                 status.ActivatableWidget = toggle;
                 about.Add(status);
@@ -85,7 +85,7 @@ internal static class SourcePage
             installed.Add(Widgets.AppRow(ui, app));
         page.Add(installed);
 
-        if (ui.Host.SourceManagerFor(source.ProviderId) is { } remover && remover.CanRemove(source))
+        if (ui.Host.Ability<ISourceManager>(source.ProviderId) is { } remover && remover.CanRemove(source))
         {
             var danger = Widgets.Group(
                 T._("Remove this source"),
@@ -118,6 +118,6 @@ internal static class SourcePage
             return;
         }
         button.Sensitive = true;
-        ui.Toast(T.F("Hmm, I couldn't remove it: {0}", AddSourcePages.Short(done.Problem ?? T._("it was cancelled"))));
+        ui.Toast(T.F("Hmm, I couldn't remove it: {0}", Widgets.Short(done.Problem ?? T._("it was cancelled"))));
     }
 }

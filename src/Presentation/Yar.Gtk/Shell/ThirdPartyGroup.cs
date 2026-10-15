@@ -159,7 +159,7 @@ internal static class ThirdPartyGroup
             }
             else
             {
-                toast(T.F("Hmm, that didn't work: {0}", AddSourcePages.Short(done.Problem ?? "")));
+                toast(T.F("Hmm, that didn't work: {0}", Widgets.Short(done.Problem ?? "")));
             }
             Show();
             toggle.Sensitive = true;

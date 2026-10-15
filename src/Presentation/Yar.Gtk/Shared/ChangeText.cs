@@ -52,7 +52,7 @@ internal static class ChangeText
     /// <summary>How a change ended, when that is anything other than "it worked".</summary>
     public static string? Ending(ChangeRecord record) => record.Outcome switch
     {
-        ChangeOutcome.Failed => T.F("Did not work: {0}", AddSourcePages.Short(record.Problem ?? "")),
+        ChangeOutcome.Failed => T.F("Did not work: {0}", Widgets.Short(record.Problem ?? "")),
         ChangeOutcome.Cancelled => T._("Cancelled before it finished"),
         ChangeOutcome.Started => T._("Never finished. I was closed or stopped in the middle, so check that it is as you expect."),
         _ => null,

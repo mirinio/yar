@@ -18,7 +18,7 @@ internal static class AddSourcePages
         foreach (var suggestion in PopularSources.LoadBundled())
         {
             var existing = PopularSources.FindExisting(suggestion, ui.Snapshot.Sources);
-            var manager = ui.Host.SourceManagerFor(suggestion.ProviderId);
+            var manager = ui.Host.Ability<ISourceManager>(suggestion.ProviderId);
 
             var row = Adw.ActionRow.New();
             row.UseMarkup = false;
@@ -62,7 +62,7 @@ internal static class AddSourcePages
     public static Adw.NavigationPage CreateByAddress(Ui ui)
     {
         var page = Adw.PreferencesPage.New();
-        var manager = ui.Host.SourceManagerFor("flatpak");
+        var manager = ui.Host.Ability<ISourceManager>("flatpak");
 
         var warning = Widgets.Group(T._("Before you add a source"));
         warning.Add(Widgets.Paragraph(
@@ -149,13 +149,7 @@ internal static class AddSourcePages
             return;
         }
         button.Sensitive = true;
-        ui.Toast(T.F("Hmm, I couldn't add it: {0}", Short(done.Problem ?? T._("it was cancelled"))));
-    }
-
-    internal static string Short(string message)
-    {
-        var line = message.Split('\n', StringSplitOptions.RemoveEmptyEntries).LastOrDefault() ?? message;
-        return line.Length > 160 ? line[..160] + "…" : line;
+        ui.Toast(T.F("Hmm, I couldn't add it: {0}", Widgets.Short(done.Problem ?? T._("it was cancelled"))));
     }
 
     private static async void Open(Ui ui, string url)

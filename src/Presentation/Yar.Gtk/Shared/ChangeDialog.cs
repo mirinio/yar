@@ -115,7 +115,7 @@ internal static class ChangeDialog
         catch (Exception e) when (e is not OutOfMemoryException)
         {
             button.Sensitive = true;
-            ui.Toast(T.F("I can't undo that: {0}", AddSourcePages.Short(e.Message)));
+            ui.Toast(T.F("I can't undo that: {0}", Widgets.Short(e.Message)));
             return;
         }
         button.Sensitive = true;
@@ -143,7 +143,7 @@ internal static class ChangeDialog
         {
             ChangeOutcome.Done => success,
             ChangeOutcome.Cancelled => T._("Cancelled. Nothing more was changed."),
-            _ => T.F("Hmm, that didn't work: {0}", AddSourcePages.Short(done.Problem ?? "")),
+            _ => T.F("Hmm, that didn't work: {0}", Widgets.Short(done.Problem ?? "")),
         });
         ui.Refresh();
     }
@@ -215,7 +215,7 @@ internal static class ChangeDialog
                 var failed = Adw.StatusPage.New();
                 failed.IconName = "dialog-warning-symbolic";
                 failed.Title = T._("Hmm, I couldn't work that out");
-                failed.Description = Widgets.Escape(AddSourcePages.Short(e.Message));
+                failed.Description = Widgets.Escape(Widgets.Short(e.Message));
                 Swap(content, failed);
                 return;
             }
