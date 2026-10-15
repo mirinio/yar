@@ -482,3 +482,12 @@ $RECYCLE.BIN/
 *.swp
 artifacts/
 TestResults/
+
+# Editors and local test output, never part of the repository.
+.idea/
+.junie/
+TestResults/
+*.DotSettings.user
+
+# Pictures kept locally that the project does not use.
+assets/package_box.jpeg

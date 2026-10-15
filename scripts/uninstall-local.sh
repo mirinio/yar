@@ -8,7 +8,7 @@ set -euo pipefail
 
 prefix="$HOME/.local"
 if [ "${1:-}" = "--prefix" ]; then prefix="$(realpath -m "$2")"; fi
-id=org.example.Yar
+id=io.github.mirinio.Yar
 
 program="$prefix/opt/yar"
 # Only remove the program folder if it really is a Yar installation.

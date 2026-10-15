@@ -94,6 +94,15 @@ internal static class SettingsDialog
                 toast: text => dialog.AddToast(Adw.Toast.New(text)), refresh));
         }
 
+        var about = Widgets.Group();
+        var version = Adw.ActionRow.New();
+        version.UseMarkup = false;
+        version.Title = T.F("Yar {0}", AppIdentity.Version);
+        version.Subtitle = T._("Your friend for apps on Linux. Free software under the GPL, version 3 or later.");
+        version.AddPrefix(Gtk.Image.NewFromIconName(AppIdentity.Id));
+        about.Add(version);
+        page.Add(about);
+
         dialog.Add(page);
         dialog.OnClosed += (_, _) =>
         {

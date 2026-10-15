@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.mirinio.Yar</id>
+  <name>Yar</name>
+  <summary>Your friend for apps on Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <developer id="io.github.mirinio">
+    <name>mirinio</name>
+  </developer>
+  <description>
+    <p>
+      Yar (the Persian word for "friend") shows everything installed on your computer in one
+      place, whether it came from your distribution, from Flathub, from the Snap Store or from
+      a file you downloaded yourself, and helps you look after it in plain language.
+    </p>
+    <ul>
+      <li>See every app, where it came from, where it lives and what it may reach</li>
+      <li>Install, update and remove Flatpak apps and your distribution's packages</li>
+      <li>Add an app you downloaded as a file or a link, checked before anything happens, and remove it cleanly later</li>
+      <li>Compare a download with the hash its publisher states</li>
+      <li>See a preview before every change, and undo it from the history</li>
+      <li>See where your disk space goes and which sources your apps come from</li>
+    </ul>
+    <p>
+      Yar never runs as root, never runs a downloaded file to inspect it, and moves what it
+      removes to the Trash.
+    </p>
+  </description>
+  <launchable type="desktop-id">io.github.mirinio.Yar.desktop</launchable>
+  <url type="homepage">https://github.com/mirinio/yar</url>
+  <url type="bugtracker">https://github.com/mirinio/yar/issues</url>
+  <url type="vcs-browser">https://github.com/mirinio/yar</url>
+  <url type="contribute">https://github.com/mirinio/yar/blob/main/CONTRIBUTING.md</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Every app on your computer, wherever it came from</caption>
+      <image>https://raw.githubusercontent.com/mirinio/yar/main/docs/screenshots/my-apps.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>An app in the Store, with every source that offers it</caption>
+      <image>https://raw.githubusercontent.com/mirinio/yar/main/docs/screenshots/store-app.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A preview before anything is installed</caption>
+      <image>https://raw.githubusercontent.com/mirinio/yar/main/docs/screenshots/install-preview.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Adding an app you downloaded</caption>
+      <image>https://raw.githubusercontent.com/mirinio/yar/main/docs/screenshots/add-app.png</image>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
+  <keywords>
+    <keyword>apps</keyword>
+    <keyword>software</keyword>
+    <keyword>install</keyword>
+    <keyword>flatpak</keyword>
+    <keyword>appimage</keyword>
+  </keywords>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.3.0" date="2026-10-15">
+      <description>
+        <p>The first public version: install, update and remove apps, add apps you downloaded, and a history with undo.</p>
+      </description>
+    </release>
+  </releases>
+</component>

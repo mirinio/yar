@@ -12,7 +12,7 @@ cd "$(dirname "$0")/.."
 prefix="$HOME/.local"
 if [ "${1:-}" = "--prefix" ]; then prefix="$(realpath -m "$2")"; fi
 
-id=org.example.Yar
+id=io.github.mirinio.Yar
 dist="artifacts/dist/yar-linux-x64"
 if [ ! -x "$dist/yar" ]; then
   echo "Building Yar..."

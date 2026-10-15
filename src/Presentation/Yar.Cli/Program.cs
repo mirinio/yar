@@ -4,6 +4,12 @@ using Yar.Hosting;
 
 // Developer tool: prints what the backends see, so they can be checked without the GUI.
 
+if (args.Contains("--version"))
+{
+    Console.WriteLine($"yar-apps {Yar.Core.AppIdentity.Version}");
+    return 0;
+}
+
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
