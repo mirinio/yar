@@ -47,4 +47,4 @@ command -v update-desktop-database >/dev/null && update-desktop-database -q "$pr
 
 echo "Installed Yar:"
 printf '  %s\n' "$program" "$command" "$entry" "$metainfo" "$icon"
-echo "It should now be in your app menu. To remove it again: scripts/uninstall-local.sh"
+echo "It should now be in your app menu. To remove it again: uninstall-local.sh, next to this script."
