@@ -1,14 +1,15 @@
 # How Yar is made
 
-Yar is written with **Claude**, an AI assistant made by Anthropic, working in Claude Code
-under the direction of its maintainer, [@mirinio](https://github.com/mirinio).
+Yar is developed by its maintainer, [@mirinio](https://github.com/mirinio), with the help of
+**Claude**, an AI assistant made by Anthropic, used through Claude Code.
 
-## Who does what
+## How the work is shared
 
-- **The maintainer** decides what Yar should be and who it is for, makes every product and
-  design decision, chooses between the approaches the assistant lays out, and uses the app.
-- **The assistant** writes the code, the tests and the documentation, and explains its
-  choices and their trade-offs before building anything larger.
+The maintainer leads the project: decides what Yar does and how, writes and reviews code,
+and tests the app on a real desktop. The assistant is used as a development tool: much of
+the code, tests and documentation is written with it, it lays out options and trade-offs
+before larger changes, and it runs reviews and the test container. Every change is directed
+and accepted by the maintainer.
 
 ## How the work is checked
 
@@ -18,16 +19,15 @@ under the direction of its maintainer, [@mirinio](https://github.com/mirinio).
 - **Real installs in throwaway containers**: every kind of install, removal, update and undo
   is carried out for real in Fedora and Ubuntu containers (`scripts/test-container.sh`),
   never on a computer someone uses.
-- **Reviews**: the code that changes the system was reviewed line by line in separate
-  review passes by the assistant, which found and fixed real bugs. None of this replaces
-  review by people, which is the most valuable help you can give.
-- **Honesty about gaps**: what has not been tried, such as the password prompt on a real
-  desktop, is written down in the README, the changelog and [SECURITY.md](SECURITY.md)
-  rather than glossed over.
+- **Reviews**: the code that changes the system has been reviewed line by line, and those
+  reviews found and fixed real bugs. More eyes are always welcome; reviewing that code is
+  among the most valuable help you can give.
+- **Honesty about gaps**: what has not been tried yet is written down in the README, the
+  changelog and [SECURITY.md](SECURITY.md) rather than glossed over.
 
 ## Why say so
 
 Because you are trusting this program with the software on your computer, you should know
-how it was made. If you find something the checks above missed, please
+how it is made. If you find something the checks above missed, please
 [open an issue](https://github.com/mirinio/yar/issues), or report it privately if it is a
 security problem.

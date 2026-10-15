@@ -50,6 +50,6 @@ Yar is in early development. Only the newest release gets security fixes.
 ## What has not been checked
 
 Yar is tested with unit tests and in throwaway Fedora and Ubuntu containers. These parts
-have not yet been tried on a real desktop: the system's password prompt, dropping a file
-with the mouse, and pinning to the taskbar. Reviews of the code that changes the system are
+have not yet been tried on a real desktop: the password prompt for system packages (the one
+for Flatpak apps has been), dropping a file with the mouse, and pinning to the taskbar. Reviews of the code that changes the system are
 very welcome.
