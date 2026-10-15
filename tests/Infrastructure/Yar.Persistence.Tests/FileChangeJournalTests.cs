@@ -62,4 +62,19 @@ public sealed class FileChangeJournalTests : IDisposable
     {
         Assert.Empty(new FileChangeJournal(File_).Read());
     }
+
+    [Fact]
+    public void Every_kind_of_change_is_written_under_a_name_that_reads_back()
+    {
+        var journal = new FileChangeJournal(File_);
+        foreach (var kind in Enum.GetValues<ChangeKind>())
+            journal.Write(Record(kind.ToString()) with { Kind = kind });
+
+        var read = journal.Read();
+
+        Assert.Equal(Enum.GetValues<ChangeKind>(), read.Select(r => r.Kind));
+        // The names are what a saved history holds: renaming one would make old entries unreadable.
+        Assert.Contains("\"kind\":\"update\"", File.ReadAllText(File_));
+        Assert.Contains("\"kind\":\"addApp\"", File.ReadAllText(File_));
+    }
 }

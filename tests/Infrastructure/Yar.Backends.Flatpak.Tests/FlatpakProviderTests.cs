@@ -6,27 +6,6 @@ public class FlatpakProviderTests
 {
     private const string UserDir = "/home/ada/.local/share/flatpak";
 
-    private sealed class FakeRunner(Func<IReadOnlyList<string>, ProcessResult> respond) : IProcessRunner
-    {
-        public List<IReadOnlyList<string>> Calls { get; } = [];
-
-        public int SetUpCalls { get; private set; }
-
-        public Task<ProcessResult> RunAsync(
-            string absolutePath, IReadOnlyList<string> arguments, TimeSpan timeout, CancellationToken ct)
-        {
-            // The one command the provider runs first, to let flatpak create the user's folders.
-            if (arguments is ["remotes"])
-            {
-                SetUpCalls++;
-                return Task.FromResult(new ProcessResult(0, "", ""));
-            }
-            lock (Calls)
-                Calls.Add(arguments);
-            return Task.FromResult(respond(arguments));
-        }
-    }
-
     private static DesktopEntry Launcher(string path, string flatpakId, string name) => new(
         path, Path.GetFileName(path), "Application", name, null, $"About {name}", flatpakId, "run", null,
         false, false, [], new Dictionary<string, string> { ["X-Flatpak"] = flatpakId });

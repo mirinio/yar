@@ -137,6 +137,25 @@ public sealed class LinkDownloaderTests : IDisposable
         Assert.True(File.Exists(path));
     }
 
+    [Fact]
+    public async Task A_download_that_ends_early_is_not_kept()
+    {
+        var web = new Web(_ =>
+        {
+            var response = File_([1, 2, 3]);
+            // The server promised more than it sent.
+            response.Content.Headers.ContentLength = 10;
+            return response;
+        });
+        using var downloader = new LinkDownloader(_directory, web);
+        var info = await downloader.ProbeAsync(new Uri("https://example.org/x.zip"), Token);
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => downloader.DownloadAsync(info, new Collect([]), Token));
+
+        Assert.Contains("ended early", error.Message);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(_directory, "*", SearchOption.AllDirectories));
+    }
+
     private sealed class Collect(List<long> into) : IProgress<long>
     {
         public void Report(long value) => into.Add(value);

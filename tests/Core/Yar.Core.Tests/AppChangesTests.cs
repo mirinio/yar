@@ -41,7 +41,7 @@ public sealed class AppChangesTests : IDisposable
         }
     }
 
-    private sealed class FakeProvider(ITrash trash) : ISoftwareProvider, ISourceManager, IAppInstaller, IAppRemover
+    private sealed class FakeProvider(ITrash trash) : ISoftwareProvider, ISourceManager, IAppInstaller, IAppRemover, IAppUpdater
     {
         public List<string> Did { get; } = [];
         public Func<CancellationToken, Task>? During { get; set; }
@@ -96,6 +96,15 @@ public sealed class AppChangesTests : IDisposable
 
         public Task<ChangePlan> PlanRemovalAsync(AppInfo app, CancellationToken ct) =>
             Task.FromResult(Plan(app.Id, app.Name) with { DataPath = "/home/u/.var/app/" + app.Id });
+
+        public Task<ChangePlan> PlanUpdateAsync(IReadOnlyList<UpdateInfo> updates, string name, CancellationToken ct) =>
+            Task.FromResult(new ChangePlan("fake", name, name, updates.Select(u => new PlanItem(u.Name)).ToList()));
+
+        public Task UpdateAsync(ChangePlan plan, IProgress<OperationProgress> progress, CancellationToken ct)
+        {
+            Did.Add($"update {plan.Name}");
+            return Task.CompletedTask;
+        }
 
         public Task<RemovalResult> RemoveAsync(
             ChangePlan plan, bool removeData, IProgress<OperationProgress> progress, CancellationToken ct)
@@ -248,5 +257,22 @@ public sealed class AppChangesTests : IDisposable
             ["add-source mine", "switch user:mine off", "switch user:mine on", "remove-source user:mine"], _provider.Did);
         var removal = _journal.Read()[^1];
         Assert.NotNull(_changes.WhyNoUndo(removal, _journal.Read()));
+    }
+
+    [Fact]
+    public async Task An_update_is_recorded_and_says_it_cannot_be_undone()
+    {
+        var waiting = new UpdateInfo("fake", "org.example.App", "App", "1", "2", UpdateSeverity.Security, null, "org.example.App");
+        var plan = await _provider.PlanUpdateAsync([waiting], "App", Token);
+
+        var updated = await _changes.UpdateAsync(plan);
+        var refused = await _changes.UpdateAsync(plan with { Blocked = "Something vital would go." });
+
+        Assert.Equal(ChangeKind.Update, updated.Kind);
+        Assert.Equal(ChangeOutcome.Done, updated.Outcome);
+        Assert.Equal(["update App"], _provider.Did);
+        Assert.Contains("can't be undone", _changes.WhyNoUndo(updated, _journal.Read()));
+        Assert.Equal(ChangeOutcome.Failed, refused.Outcome);
+        Assert.Equal("Something vital would go.", refused.Problem);
     }
 }
