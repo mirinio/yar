@@ -149,7 +149,7 @@ Requirements: GTK 4.14 or newer and libadwaita 1.5 or newer.
 | Ubuntu 24.04 | Installing, removing, updating and adding apps tested in a container; the window itself not yet tried |
 | openSUSE, Arch, others | Not tried; Yar uses PackageKit, so they may work |
 | Snap | Snap apps are listed; installing and removing snaps is not supported yet |
-| Not yet tried on a real desktop | The system password prompt, dropping a file with the mouse, pinning to the taskbar |
+| Not yet tried on a real desktop | The password prompt for system packages (Flatpak's has been tried), dropping a file with the mouse, pinning to the taskbar |
 
 Reports from other distributions are welcome in the [issues](https://github.com/mirinio/yar/issues).
 
