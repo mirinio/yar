@@ -55,7 +55,7 @@ magick -delay 240 -loop 0 "$work"/frames/*.png -resize 820x -dither FloydSteinbe
 
 # The picture shown when the repository's link is shared: logo, name and one screenshot.
 magick -size 1280x640 gradient:'#1e2a44-#241f31' \
-  \( -background none assets/cube_logo.svg -resize 150x150 \) -geometry +80+120 -composite \
+  \( -background none assets/cube_logo.svg -resize 170x170 \) -geometry +70+110 -composite \
   -font Noto-Sans-Bold -fill white -pointsize 92 -annotate +80+380 'Yar' \
   -font Noto-Sans-Regular -fill '#c8d0e0' -pointsize 34 -annotate +84+440 'An app manager for Linux' \
   -pointsize 21 -fill '#9aa4b8' -annotate +84+500 'Every installed app, from any source, in one place.' \
