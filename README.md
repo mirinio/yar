@@ -9,7 +9,7 @@ Store, or from a file you downloaded yourself — in one friendly place.
 > **Status: early development.** Yar shows your apps, where they come from, what is
 > on offer and where your disk space goes. It installs and removes Flatpak apps and
 > system packages, adds apps you bring as a file or a link, and keeps a history of
-> what it changed, with undo. It does not install updates yet.
+> what it changed, with undo.
 
 ## What works today
 
@@ -26,7 +26,7 @@ Store, or from a file you downloaded yourself — in one friendly place.
 - **Open Source tab** (off unless you switch it on): new GitHub projects that are gathering stars, by programming language and period
 - **Adding sources**: a built-in list of popular sources and a way to add a Flatpak source by its address, each marked with how well Yar knows it. Sources that are already set up can be switched on and off, right in the list
 - **Software from outside your distribution**: on Fedora, the settings hold the one yes-or-no choice for Fedora's prepared third-party sources (Chrome, Steam, NVIDIA drivers, full Flathub), with a plain explanation of open source, closed source and mixed software behind a "?"
-- **Updates**: what is waiting, app updates by name and system updates grouped, with security fixes marked. Yar shows them; installing still happens in Discover or GNOME Software
+- **Updates**: what is waiting, app updates by name and system updates grouped, with security fixes marked. Update one app from its row or its page, only your apps, or everything at once; each shows a preview first, including what comes along and whether to restart afterwards. Updates can't be undone, and the history says so
 - **Starts at once**: Yar shows the list it saved last time, checks it in the background, and updates itself when you install or remove something while it is open
 - "?" buttons explain terms a newcomer may not know; "Show technical details" adds package names and IDs
 - Works through PackageKit, so the same code covers dnf, apt, zypper and pacman

@@ -13,6 +13,9 @@ public enum ChangeKind
     SwitchSourceOff,
     AllowThirdParty,
     DeclineThirdParty,
+
+    /// <summary>Newer versions installed over what was there. Appended last: the names are what the saved history holds.</summary>
+    Update,
 }
 
 public enum ChangeOutcome

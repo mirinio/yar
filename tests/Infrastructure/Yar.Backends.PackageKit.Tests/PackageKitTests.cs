@@ -97,6 +97,15 @@ public partial class PackageKitTests
             return Task.CompletedTask;
         }
 
+        public Task<IReadOnlyList<PkPackage>> SimulateUpdateAsync(IReadOnlyList<string> ids, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyList<PkPackage>>(Simulated);
+
+        public Task UpdateAsync(IReadOnlyList<string> ids, IProgress<PkProgress> progress, CancellationToken ct)
+        {
+            Changes.Add("update " + string.Join(",", ids));
+            return Task.CompletedTask;
+        }
+
         public Task InstallAsync(IReadOnlyList<string> ids, IProgress<PkProgress> progress, CancellationToken ct)
         {
             progress.Report(new(PkProgress.Download, 40, AllowCancel: true));

@@ -8,6 +8,8 @@ namespace Yar.App;
 /// </summary>
 internal static class ChangeDialog
 {
+    private const int MaxItemsShown = 80;
+
     public static void Install(Ui ui, StoreApp app, StoreOffer offer)
     {
         if (ui.Host.Ability<IAppInstaller>(offer.ProviderId) is not { } installer ||
@@ -33,6 +35,71 @@ internal static class ChangeDialog
             (_, ct) => remover.PlanRemovalAsync(app, ct),
             async (plan, removeData) => Report(
                 ui, await ui.Host.Make.RemoveAsync(plan, removeData), T.F("{0} is removed. You can undo this under History.", app.Name)));
+    }
+
+    /// <summary>Installs waiting updates, from one source or several, after showing everything they involve.</summary>
+    /// <param name="what">What to call them: an app's name, or a phrase such as "all updates".</param>
+    public static void Update(Ui ui, string what, IReadOnlyList<UpdateInfo> updates)
+    {
+        var batches = updates.GroupBy(u => u.ProviderId)
+            .Where(batch => ui.Host.Ability<IAppUpdater>(batch.Key) is not null)
+            .ToList();
+        if (batches.Count == 0)
+        {
+            ui.Toast(T._("I can't install these updates. Your software centre can."));
+            return;
+        }
+
+        var plans = new List<ChangePlan>();
+        Present(
+            ui, updates.Count == 1 ? T.F("Update {0}?", what) : T.F("Install {0}?", what), T._("Update"),
+            destructive: false, targets: [],
+            async (_, ct) =>
+            {
+                plans.Clear();
+                foreach (var batch in batches)
+                {
+                    var name = batches.Count == 1 ? what : T.F("{0} updates ({1})", batch.Count(), ui.Presentation.ProviderTitle(batch.Key));
+                    plans.Add(await ui.Host.Ability<IAppUpdater>(batch.Key)!.PlanUpdateAsync(batch.ToList(), name, ct));
+                }
+                return Combine(plans, what);
+            },
+            async (_, _) =>
+            {
+                // Each kind of software updates through its own tool, one after the other.
+                ChangeRecord? last = null;
+                var failed = new List<ChangeRecord>();
+                foreach (var plan in plans.Where(p => p.Blocked is null).ToList())
+                {
+                    last = await ui.Host.Make.UpdateAsync(plan);
+                    if (last.Outcome != ChangeOutcome.Done)
+                        failed.Add(last);
+                }
+                if (failed.Count > 0)
+                    Report(ui, failed[0], "");
+                else if (last is not null)
+                    Report(ui, last, updates.Count == 1 ? T.F("{0} is up to date.", what) : T._("Done. Those updates are installed."));
+            });
+    }
+
+    // Several tools' plans shown as one preview. Each is still carried out by its own tool.
+    private static ChangePlan Combine(List<ChangePlan> plans, string name)
+    {
+        if (plans.Count == 1)
+            return plans[0];
+        var usable = plans.Where(p => p.Blocked is null).ToList();
+        return new ChangePlan("several", name, name, usable.SelectMany(p => p.Items).ToList())
+        {
+            DownloadBytes = usable.Count > 0 && usable.All(p => p.DownloadBytes is not null) ? usable.Sum(p => p.DownloadBytes!.Value) : null,
+            NeedsPassword = usable.Any(p => p.NeedsPassword),
+            Warnings =
+            [
+                .. usable.SelectMany(p => p.Warnings),
+                .. plans.Where(p => p.Blocked is not null).Select(p => $"I leave out {p.Name}: {p.Blocked}"),
+            ],
+            Notes = usable.SelectMany(p => p.Notes).Distinct().ToList(),
+            Blocked = usable.Count == 0 ? plans[0].Blocked : null,
+        };
     }
 
     /// <summary>Reverses a change from the history, after showing what that comes down to.</summary>
@@ -261,7 +328,8 @@ internal static class ChangeDialog
             var items = Widgets.Group(
                 T._("What this involves"),
                 sizes.Count == 0 ? null : string.Join(" · ", sizes));
-            foreach (var item in plan.Items)
+            // A system update can run to hundreds of parts; the first ones tell the story, the count the rest.
+            foreach (var item in plan.Items.Take(MaxItemsShown))
             {
                 var row = Adw.ActionRow.New();
                 row.UseMarkup = false;
@@ -277,6 +345,8 @@ internal static class ChangeDialog
                 }
                 items.Add(row);
             }
+            if (plan.Items.Count > MaxItemsShown)
+                items.Add(Note("view-more-symbolic", T.F("…and {0} more.", plan.Items.Count - MaxItemsShown)));
             page.Add(items);
         }
 

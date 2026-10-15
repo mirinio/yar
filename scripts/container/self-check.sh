@@ -62,6 +62,17 @@ yar-apps install "$app" --kind flatpak --yes >/tmp/install.log 2>&1 && pass "Yar
 echo "        progress lines Yar reported: $(grep -c '^  ' /tmp/install.log)"; grep '^  ' /tmp/install.log | sed -n '1,4p;$p' | sed 's/^/      /'
 has && pass "flatpak agrees it is installed" || fail "flatpak agrees it is installed"
 lists flatseal && pass "Yar lists Flatseal" || fail "Yar lists Flatseal"
+# An older build is put in place by hand, so that there is an update for Yar to find and install.
+older="$(flatpak remote-info --user --log flathub "$app" 2>/dev/null | awk '/Commit:/ { print $2 }' | sed -n 2p)"
+if [ -n "$older" ] && flatpak update --user --noninteractive --commit="$older" "$app" >/dev/null 2>&1; then
+  said="$(yar-apps updates 2>&1)"; echo "$said" | grep -qi flatseal && pass "Yar sees that an update is waiting for Flatseal" || fail "Yar sees that an update is waiting for Flatseal"
+  yar-apps update "$app" 2>&1 | sed 's/^/        /'
+  check "Yar installs the update" yar-apps update "$app" --yes
+  [ "$(flatpak info --user --show-commit "$app" 2>/dev/null)" != "$older" ] && pass "flatpak agrees it is no longer the older build" || fail "flatpak agrees it is no longer the older build"
+  said="$(yar-apps updates 2>&1)"; echo "$said" | grep -qi flatseal && fail "no update is waiting for it any more" || pass "no update is waiting for it any more"
+else
+  echo "  skip  no older build of Flatseal could be put in place to update from"
+fi
 mkdir -p "$data/config" && echo mine > "$data/config/settings"
 check "Yar removes it and keeps its data" yar-apps remove "$app" --yes
 ! has && [ -f "$data/config/settings" ] && pass "the app is gone, the data is still there" || fail "the app is gone, the data is still there"
@@ -175,6 +186,30 @@ else
 fi
 flatpak uninstall --user --noninteractive --unused >/dev/null 2>&1
 cd /
+
+step "Yar installs a waiting system update"
+listed() { yar-apps updates 2>/dev/null | awk '$1 == "packagekit" { print $4 }'; }
+pkcon refresh >/dev/null 2>&1
+waiting="$(listed)"
+# A freshly built container can be fully up to date. Then an older version is put in place by hand first.
+if [ -z "$waiting" ] && command -v dnf >/dev/null; then
+  for candidate in tzdata less sed gawk grep gzip tar findutils; do
+    if dnf -y -q downgrade "$candidate" >/dev/null 2>&1; then echo "        put an older $candidate in place"; break; fi
+  done
+  pkcon refresh >/dev/null 2>&1
+  waiting="$(listed)"
+fi
+pick="$(echo "$waiting" | grep -E -m1 '^(tzdata|less|sed|gawk|grep|file-libs|xz-libs|zlib|libcap|findutils|diffutils|gzip|tar)' || echo "$waiting" | head -1)"
+if [ -z "$pick" ]; then
+  echo "  skip  no system update is waiting in this container"
+else
+  yar-apps update "$pick" 2>&1 | sed 's/^/        /' | head -12
+  check "Yar installs the update for $pick" yar-apps update "$pick" --yes
+  said="$(yar-apps updates 2>/dev/null | awk -v p="$pick" '$1 == "packagekit" && $4 == p')"
+  [ -z "$said" ] && pass "it is no longer waiting" || fail "it is no longer waiting"
+  # The last line of the history is the count; the entry before it is the newest change.
+  yar-apps history | tail -2 | head -1 | grep -q 'Update  *-' && pass "the update is in the history, without an undo" || fail "the update is in the history, without an undo"
+fi
 
 step "A package source can be switched through Yar (the switch that needs a password on a real system)"
 source_id="$(yar-apps sources 2>/dev/null | awk '$1 == "packagekit" && $3 == "off" { print $2; exit }')"

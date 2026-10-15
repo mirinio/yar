@@ -32,3 +32,15 @@ public interface IAppRemover
     Task<RemovalResult> RemoveAsync(
         ChangePlan plan, bool removeData, IProgress<OperationProgress> progress, CancellationToken ct);
 }
+
+/// <summary>Optional: a provider that can install the newer versions it reported as waiting.</summary>
+public interface IAppUpdater
+{
+    /// <summary>Works out what installing these updates involves. Changes nothing.</summary>
+    /// <param name="updates">Updates this provider reported, all of them its own.</param>
+    /// <param name="name">What to call the change: an app's name, or a phrase such as "12 updates".</param>
+    Task<ChangePlan> PlanUpdateAsync(IReadOnlyList<UpdateInfo> updates, string name, CancellationToken ct);
+
+    /// <summary>Carries out a plan from <see cref="PlanUpdateAsync"/>. The system may ask for the user's password.</summary>
+    Task UpdateAsync(ChangePlan plan, IProgress<OperationProgress> progress, CancellationToken ct);
+}

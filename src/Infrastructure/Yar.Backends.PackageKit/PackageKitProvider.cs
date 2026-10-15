@@ -7,7 +7,7 @@ namespace Yar.Backends.PackageKit;
 /// covers dnf, apt, zypper and pacman.
 /// </summary>
 public sealed partial class PackageKitProvider
-    : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider, IAppInstaller, IAppRemover, IFileIntakeHandler
+    : ISoftwareProvider, IUpdateProvider, ISourceManager, IOfferSizeProvider, IAppInstaller, IAppRemover, IFileIntakeHandler, IAppUpdater
 {
     public const string ProviderId = "packagekit";
 

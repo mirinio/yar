@@ -71,6 +71,16 @@ public sealed class AppChanges(
                 }
             });
 
+    /// <summary>Carries out a plan from <see cref="IAppUpdater.PlanUpdateAsync"/>.</summary>
+    public Task<ChangeRecord> UpdateAsync(ChangePlan plan) =>
+        runner.RunAsync(
+            ChangeRecord.Begin(ChangeKind.Update, plan.ProviderId, plan.Target, plan.Name) with { Origin = plan.Origin },
+            context =>
+            {
+                Refuse(plan);
+                return Ability<IAppUpdater>(plan.ProviderId).UpdateAsync(plan, context.Progress, context.Ct);
+            });
+
     /// <summary>Adds an app the user brought as a file, as previewed in <paramref name="plan"/>.</summary>
     public Task<ChangeRecord> AddAppAsync(IAppIntake intake, IntakeReport report, IntakeChoices choices, ChangePlan plan) =>
         runner.RunAsync(
@@ -136,6 +146,8 @@ public sealed class AppChanges(
 
         return record.Kind switch
         {
+            ChangeKind.Update =>
+                "An update can't be undone from here: sources only keep the newest version on offer.",
             ChangeKind.RemoveSource =>
                 "A removed source has to be added again from the Sources tab, with its address.",
             ChangeKind.AddSource or ChangeKind.SwitchSourceOn or ChangeKind.SwitchSourceOff =>

@@ -7,10 +7,11 @@ using Yar.Hosting;
 var json = args.Contains("--json");
 var timings = args.Contains("--timings");
 var command = args.FirstOrDefault(a => !a.StartsWith('-'));
-if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove" or "inspect" or "add" or "verify"))
+if (command is not ("sources" or "apps" or "status" or "unclaimed" or "updates" or "store" or "source-add" or "source-remove" or "permissions" or "attention" or "storage" or "source-switch" or "history" or "undo" or "install" or "remove" or "inspect" or "add" or "verify" or "update"))
 {
     Console.Error.WriteLine("Usage: yar-apps <sources|apps|status|unclaimed|updates|attention|storage|store <words>> [--json] [--timings]");
     Console.Error.WriteLine("       yar-apps install <app id> | remove <app> | inspect <file> | add <file or https link> | verify <app>");
+    Console.Error.WriteLine("       yar-apps update <app or package> | update --all");
     Console.Error.WriteLine("       yar-apps history | undo <id>");
     Console.Error.WriteLine("Commands that change something print their plan and do nothing without --yes.");
     return 2;
@@ -171,6 +172,49 @@ if (command is "install" or "remove")
         return 1;
     Console.WriteLine($"done ({done.Id}) {done.Target}{(done.Trashed.Count > 0 ? $", {done.Trashed.Count} moved to the Trash" : "")}");
     return 0;
+}
+
+// yar-apps update <app, package or update ID> [--yes], or update --all [--yes]: installs waiting updates.
+if (command == "update")
+{
+    var wantedUpdate = args.Where(a => !a.StartsWith('-')).ElementAtOrDefault(1);
+    var everything = await host.Catalog.LoadAsync(CancellationToken.None);
+    var chosen = everything.Updates
+        .Where(u => host.Ability<Yar.Core.IAppUpdater>(u.ProviderId) is not null)
+        .Where(u => args.Contains("--all") || (wantedUpdate is not null &&
+            (u.Id == wantedUpdate || u.AppId == wantedUpdate || u.Name.Equals(wantedUpdate, StringComparison.OrdinalIgnoreCase) ||
+             u.Id.StartsWith(wantedUpdate + ".", StringComparison.Ordinal) || u.Id.EndsWith(":" + wantedUpdate, StringComparison.Ordinal))))
+        .ToList();
+    if (chosen.Count == 0)
+    {
+        Console.Error.WriteLine("No waiting update matches. See: yar-apps updates");
+        return 1;
+    }
+
+    var updatePlans = new List<Yar.Core.ChangePlan>();
+    foreach (var batch in chosen.GroupBy(u => u.ProviderId))
+    {
+        var updatePlan = await host.Ability<Yar.Core.IAppUpdater>(batch.Key)!.PlanUpdateAsync(
+            batch.ToList(), batch.Count() == 1 ? batch.First().Name : $"{batch.Count()} updates ({batch.Key})", CancellationToken.None);
+        Console.WriteLine($"{updatePlan.Name}:");
+        PrintPlan(updatePlan);
+        updatePlans.Add(updatePlan);
+    }
+    if (updatePlans.All(p => p.Blocked is not null))
+        return 1;
+    if (!args.Contains("--yes"))
+    {
+        Console.WriteLine("Nothing was changed. Add --yes to do it.");
+        return 0;
+    }
+    var updateFailed = false;
+    foreach (var updatePlan in updatePlans.Where(p => p.Blocked is null))
+    {
+        var updated = await host.Make.UpdateAsync(updatePlan);
+        updateFailed |= Failed(updated);
+        Console.WriteLine($"{updated.Outcome} ({updated.Id}) {updated.Name}");
+    }
+    return updateFailed ? 1 : 0;
 }
 
 // yar-apps inspect <file>: what the file is and whether it can run here. Changes nothing.

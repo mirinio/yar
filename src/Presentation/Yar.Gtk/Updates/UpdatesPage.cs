@@ -3,7 +3,7 @@ using Yar.Core;
 
 namespace Yar.App;
 
-/// <summary>"Updates": what is waiting to be installed. Yar only shows them; installing happens elsewhere for now.</summary>
+/// <summary>"Updates": what is waiting to be installed, one by one or all at once.</summary>
 internal sealed class UpdatesPage
 {
     // Programs that can install updates, with the arguments that open their updates view.
@@ -62,11 +62,28 @@ internal sealed class UpdatesPage
                 security > 0 ? T.F("{0} of them fix security problems.", security) : null,
                 freshness,
             }.Where(text => text is not null)));
-        if (Updaters.FirstOrDefault(u => File.Exists(u.Path)) is { Path: not null } updater)
+        var updatable = updates.Where(u => ui.Host.Ability<IAppUpdater>(u.ProviderId) is not null).ToList();
+        if (updatable.Count > 0)
+        {
+            var everything = Adw.ActionRow.New();
+            everything.UseMarkup = false;
+            everything.Title = T._("Install all of them");
+            everything.Subtitle = updatable.Count == updates.Count
+                ? T._("I show you everything this involves first.")
+                : T.F("{0} of them I can't install myself; your software centre can.", updates.Count - updatable.Count);
+            var all = Gtk.Button.NewWithLabel(T._("Update all…"));
+            all.Valign = Gtk.Align.Center;
+            all.AddCssClass("suggested-action");
+            all.OnClicked += (_, _) => ChangeDialog.Update(
+                ui, T.F(updatable.Count == 1 ? "{0} update" : "all {0} updates", updatable.Count), updatable);
+            everything.AddSuffix(all);
+            summary.Add(everything);
+        }
+        else if (Updaters.FirstOrDefault(u => File.Exists(u.Path)) is { Path: not null } updater)
         {
             var row = Adw.ActionRow.New();
             row.UseMarkup = false;
-            row.Title = T._("I can show updates, but not install them yet");
+            row.Title = T._("I can't install these updates myself");
             row.Subtitle = T.F("To install them, open {0}.", updater.Name);
             var button = Gtk.Button.NewWithLabel(T.F("Open {0}", updater.Name));
             button.Valign = Gtk.Align.Center;
@@ -86,8 +103,17 @@ internal sealed class UpdatesPage
         if (appUpdates.Count > 0)
         {
             var group = Widgets.Group(T._("Your apps"));
+            var theirs = appUpdates.Where(u => ui.Host.Ability<IAppUpdater>(u.ProviderId) is not null).ToList();
+            if (theirs.Count > 1)
+            {
+                var onlyApps = Gtk.Button.NewWithLabel(T._("Update these…"));
+                onlyApps.Valign = Gtk.Align.Center;
+                onlyApps.TooltipText = T._("Only your apps, without the system updates below");
+                onlyApps.OnClicked += (_, _) => ChangeDialog.Update(ui, T.F("{0} app updates", theirs.Count), theirs);
+                group.HeaderSuffix = onlyApps;
+            }
             foreach (var update in appUpdates)
-                group.Add(UpdateRow(ui, update));
+                group.Add(UpdateRow(ui, update, offerUpdate: true));
             _page.Add(group);
         }
 
@@ -115,7 +141,7 @@ internal sealed class UpdatesPage
         _stack.VisibleChildName = "list";
     }
 
-    private static Adw.ActionRow UpdateRow(Ui ui, UpdateInfo update)
+    private static Adw.ActionRow UpdateRow(Ui ui, UpdateInfo update, bool offerUpdate = false)
     {
         var row = Adw.ActionRow.New();
         row.UseMarkup = false;
@@ -128,6 +154,14 @@ internal sealed class UpdatesPage
         };
         row.AddSuffix(Widgets.Tag(
             Presentation.SeverityName(update.Severity), attention: update.Severity == UpdateSeverity.Security));
+
+        if (offerUpdate && ui.Host.Ability<IAppUpdater>(update.ProviderId) is not null)
+        {
+            var one = Gtk.Button.NewWithLabel(T._("Update"));
+            one.Valign = Gtk.Align.Center;
+            one.OnClicked += (_, _) => ChangeDialog.Update(ui, update.Name, [update]);
+            row.AddSuffix(one);
+        }
 
         if (ui.Presentation.AppFor(update) is { } app)
         {

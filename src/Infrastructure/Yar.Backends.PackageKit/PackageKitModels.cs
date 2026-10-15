@@ -131,4 +131,10 @@ public interface IPackageKitClient
     /// nobody the system knows has signed, so it is only for files the user explicitly vouched for.
     /// </summary>
     Task InstallFilesAsync(IReadOnlyList<string> paths, IProgress<PkProgress> progress, CancellationToken ct);
+
+    /// <summary>Everything updating these packages would install, update or remove, without doing it.</summary>
+    Task<IReadOnlyList<PkPackage>> SimulateUpdateAsync(IReadOnlyList<string> packageIds, CancellationToken ct);
+
+    /// <summary>Installs the newer versions named by these package IDs. Only signed packages.</summary>
+    Task UpdateAsync(IReadOnlyList<string> packageIds, IProgress<PkProgress> progress, CancellationToken ct);
 }

@@ -41,6 +41,14 @@ internal static class AppDetailsPage
             open.OnClicked += (_, _) => AppLauncher.Start(ui, app, launcher);
             actions.Append(open);
         }
+        if (ui.Presentation.UpdateFor(app) is { } waiting && ui.Host.Ability<IAppUpdater>(app.ProviderId) is not null)
+        {
+            var updateNow = Gtk.Button.NewWithLabel(
+                waiting.NewVersion is null || waiting.NewVersion == app.Version ? T._("Update…") : T.F("Update to {0}…", waiting.NewVersion));
+            updateNow.AddCssClass("pill");
+            updateNow.OnClicked += (_, _) => ChangeDialog.Update(ui, app.Name, [waiting]);
+            actions.Append(updateNow);
+        }
         if (ui.Host.Ability<IAppRemover>(app.ProviderId) is { } remover)
         {
             var remove = Gtk.Button.NewWithLabel(T._("Remove…"));

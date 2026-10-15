@@ -140,6 +140,13 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     public Task InstallFilesAsync(IReadOnlyList<string> paths, IProgress<PkProgress> progress, CancellationToken ct) =>
         ChangeAsync(transaction => transaction.InstallFilesAsync(0, [.. paths]), progress, ct);
 
+    public Task<IReadOnlyList<PkPackage>> SimulateUpdateAsync(IReadOnlyList<string> packageIds, CancellationToken ct) =>
+        CollectPackagesAsync(
+            transaction => transaction.UpdatePackagesAsync(FlagOnlyTrusted | FlagSimulate, [.. packageIds]), ct, ChangeTimeout);
+
+    public Task UpdateAsync(IReadOnlyList<string> packageIds, IProgress<PkProgress> progress, CancellationToken ct) =>
+        ChangeAsync(transaction => transaction.UpdatePackagesAsync(FlagOnlyTrusted, [.. packageIds]), progress, ct);
+
     // autoremove stays off: taking away what "nothing needs any more" is a decision of its own.
     public Task RemoveAsync(
         IReadOnlyList<string> packageIds, bool allowDependents, IProgress<PkProgress> progress, CancellationToken ct) =>
@@ -292,7 +299,7 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
     }
 
     private async Task<IReadOnlyList<PkPackage>> CollectPackagesAsync(
-        Func<Transaction, Task> start, CancellationToken ct)
+        Func<Transaction, Task> start, CancellationToken ct, TimeSpan? timeout = null)
     {
         var packages = new List<PkPackage>();
         await RunAsync(
@@ -304,7 +311,7 @@ public sealed class PackageKitClient : IPackageKitClient, IDisposable
                 },
                 emitOnCapturedContext: false).ConfigureAwait(false)],
             start,
-            ct).ConfigureAwait(false);
+            ct, timeout).ConfigureAwait(false);
         return packages;
     }
 
