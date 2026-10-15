@@ -9,6 +9,10 @@ on:
 permissions:
   contents: write
 
+env:
+  # Releases are marked as pre-releases while Yar is early. Set to "false" for the first normal release.
+  PRERELEASE: "true"
+
 jobs:
   release:
     runs-on: ubuntu-24.04
@@ -41,5 +45,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" --title "Yar $VERSION" --notes-file notes.md \
+          flags=()
+          [ "$PRERELEASE" = "true" ] && flags+=(--prerelease)
+          gh release create "$GITHUB_REF_NAME" --title "Yar $VERSION" --notes-file notes.md "${flags[@]}" \
             "artifacts/dist/yar-$VERSION-linux-x64.tar.gz" "artifacts/dist/yar-$VERSION-linux-x64.tar.gz.sha256"
