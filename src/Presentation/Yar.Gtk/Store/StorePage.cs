@@ -2,7 +2,7 @@ using Yar.Core;
 
 namespace Yar.App;
 
-/// <summary>"Store": apps you could install, from every catalog on this computer. Shows; does not install yet.</summary>
+/// <summary>"Store": apps you could install, from every catalog on this computer, merged so each app is listed once.</summary>
 internal sealed class StorePage
 {
     private const int MaxResults = 60;
