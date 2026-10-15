@@ -152,8 +152,12 @@ internal sealed class UpdatesPage
             (null, { } next) => next,
             _ => "",
         };
-        row.AddSuffix(Widgets.Tag(
-            Presentation.SeverityName(update.Severity), attention: update.Severity == UpdateSeverity.Security));
+        // An ordinary update needs no tag; "Update" beside an Update button would only repeat it.
+        if (update.Severity != UpdateSeverity.Normal)
+        {
+            row.AddSuffix(Widgets.Tag(
+                Presentation.SeverityName(update.Severity), attention: update.Severity == UpdateSeverity.Security));
+        }
 
         if (offerUpdate && ui.Host.Ability<IAppUpdater>(update.ProviderId) is not null)
         {

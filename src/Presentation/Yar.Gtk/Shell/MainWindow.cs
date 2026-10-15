@@ -3,7 +3,7 @@ using Yar.Hosting;
 
 namespace Yar.App;
 
-internal sealed class MainWindow
+internal sealed partial class MainWindow
 {
     private readonly YarHost _host;
     private readonly Settings _settings;
@@ -119,7 +119,16 @@ internal sealed class MainWindow
         StartUp();
     }
 
-    public void Present() => _window.Present();
+    public void Present()
+    {
+#if YAR_SCREENSHOTS
+        PrepareScreenshots();
+#endif
+        _window.Present();
+#if YAR_SCREENSHOTS
+        StartScreenshots();
+#endif
+    }
 
     // Adding an app happens under My Apps, whichever tab the file was dropped on.
     private void ShowApps()

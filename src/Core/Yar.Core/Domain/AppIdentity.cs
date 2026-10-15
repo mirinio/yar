@@ -6,6 +6,12 @@ public static class AppIdentity
     /// <summary>Flathub's form for a project hosted at github.com/mirinio/yar. Renaming means this line and the files in <c>data/</c>.</summary>
     public const string Id = "io.github.mirinio.Yar";
 
+    /// <summary>Where the project lives; also how Yar names itself to the web services it asks.</summary>
+    public const string Homepage = "https://github.com/mirinio/yar";
+
+    /// <summary>What Yar sends as its name to web services: name, version and where to find the project.</summary>
+    public static string UserAgent => $"Yar/{Version} (+{Homepage})";
+
     /// <summary>The version this build was made as, from Directory.Build.props.</summary>
     public static string Version { get; } =
         typeof(AppIdentity).Assembly.GetName().Version is { } version ? $"{version.Major}.{version.Minor}.{version.Build}" : "unknown";

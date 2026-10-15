@@ -4,6 +4,12 @@
     <AssemblyName>yar</AssemblyName>
     <RootNamespace>Yar.App</RootNamespace>
   </PropertyGroup>
+  <!-- The screenshot mode (Shell/ScreenshotMode.cs) exists only in this configuration, which has its own
+       build folders, so it can never end up in a normal or release build. Used by scripts/screenshots.sh. -->
+  <PropertyGroup Condition="'$(Configuration)' == 'Screenshots'">
+    <DefineConstants>$(DefineConstants);YAR_SCREENSHOTS</DefineConstants>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../Composition/Yar.Hosting/Yar.Hosting.csproj" />
   </ItemGroup>

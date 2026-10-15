@@ -29,7 +29,7 @@ public sealed class GitHubFeed : IDeveloperFeed, IDisposable
         _client = handler is null ? new HttpClient() : new HttpClient(handler);
         _client.Timeout = TimeSpan.FromSeconds(15);
         _client.MaxResponseContentBufferSize = 4 * 1024 * 1024;
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Yar/0.1");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd(AppIdentity.UserAgent);
         _client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
     }
 

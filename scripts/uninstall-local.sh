@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Removes what scripts/install-local.sh installed, and nothing else.
-# Your settings (~/.config/yar) and saved lists (~/.cache/yar) are left alone; it says where they are.
+# Settings, saved lists, the history and apps you added with Yar are left alone; it says where they are.
 #
 #   scripts/uninstall-local.sh                 remove from ~/.local
 #   scripts/uninstall-local.sh --prefix DIR    remove from DIR instead
@@ -36,4 +36,5 @@ command -v update-desktop-database >/dev/null && [ -d "$prefix/share/application
   && update-desktop-database -q "$prefix/share/applications" || true
 
 if [ "$removed" -eq 0 ]; then echo "Yar was not installed under $prefix."; else echo "Yar is removed."; fi
-echo "Your settings and saved lists, if any, are still in ~/.config/yar and ~/.cache/yar."
+echo "Left alone: your settings (~/.config/yar), saved lists (~/.cache/yar), the history of changes"
+echo "(~/.local/state/yar), and the apps you added with Yar, with their notes in ~/.local/share/yar."

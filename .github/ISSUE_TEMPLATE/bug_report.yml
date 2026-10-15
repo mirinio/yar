@@ -1,0 +1,44 @@
+name: Bug report
+description: Something in Yar doesn't work as it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time. For a security problem, please don't use this form: see SECURITY.md.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: distro
+    attributes:
+      label: Distribution and version
+      placeholder: Fedora 44, Ubuntu 24.04, …
+    validations:
+      required: true
+  - type: input
+    id: desktop
+    attributes:
+      label: Desktop
+      placeholder: KDE Plasma 6, GNOME 48, …
+  - type: input
+    id: version
+    attributes:
+      label: Yar version
+      description: The output of `yar-apps --version`, or Yar's settings page.
+    validations:
+      required: true
+  - type: textarea
+    id: status
+    attributes:
+      label: Output of `yar-apps status`
+      render: text
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: Screenshots, error messages, the steps to make it happen again.

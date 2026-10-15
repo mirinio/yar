@@ -42,7 +42,7 @@ public sealed class OnlineStoreData : IOnlineStoreData, IDisposable
         _client = handler is null ? new HttpClient() : new HttpClient(handler);
         _client.Timeout = TimeSpan.FromSeconds(15);
         _client.MaxResponseContentBufferSize = 16 * 1024 * 1024;
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Yar/0.1");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd(AppIdentity.UserAgent);
     }
 
     public async Task<StoreCollections> GetCollectionsAsync(CancellationToken ct)

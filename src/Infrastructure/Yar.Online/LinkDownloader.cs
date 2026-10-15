@@ -24,7 +24,7 @@ public sealed class LinkDownloader : IAppDownloader, IDisposable
         {
             Timeout = Timeout.InfiniteTimeSpan,
         };
-        _client.DefaultRequestHeaders.UserAgent.ParseAdd("Yar/0.1");
+        _client.DefaultRequestHeaders.UserAgent.ParseAdd(AppIdentity.UserAgent);
     }
 
     public async Task<LinkInfo> ProbeAsync(Uri link, CancellationToken ct)

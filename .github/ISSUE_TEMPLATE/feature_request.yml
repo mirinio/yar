@@ -1,0 +1,23 @@
+name: Idea or wish
+description: Something Yar should do, or do differently
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the situation, not just the solution. What gets in your way today?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: dropdown
+    id: newcomer
+    attributes:
+      label: Would this help someone new to Linux?
+      options:
+        - "Yes"
+        - "Mostly experienced users"
+        - "Not sure"

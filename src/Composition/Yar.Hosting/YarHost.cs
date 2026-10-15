@@ -12,7 +12,7 @@ namespace Yar.Hosting;
 /// <summary>Wires the backends together. Shared by the app and the command-line tool.</summary>
 public sealed class YarHost : IDisposable
 {
-    /// <summary>Placeholder until the project has its real reverse-DNS ID.</summary>
+    /// <summary>The app ID the desktop knows Yar by; see <see cref="AppIdentity"/>.</summary>
     public const string AppId = AppIdentity.Id;
 
     private readonly SnapProvider _snap;
