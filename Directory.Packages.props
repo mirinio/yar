@@ -8,7 +8,7 @@
     <PackageVersion Include="GirCore.Gtk-4.0" Version="0.8.1" />
     <PackageVersion Include="NGettext" Version="0.6.7" />
     <PackageVersion Include="Tmds.DBus.Protocol" Version="0.95.1" />
-    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+    <PackageVersion Include="xunit.v3" Version="4.0.3" />
     <PackageVersion Include="YamlDotNet" Version="18.1.0" />
   </ItemGroup>
 </Project>
